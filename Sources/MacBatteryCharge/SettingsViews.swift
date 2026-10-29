@@ -184,7 +184,7 @@ struct LookCard: View {
             .disabled(model.settings.look == .solid)
             Divider()
             ToggleRow(title: T("刘海灵动岛"),
-                      info: T("鼠标移到刘海上，从刘海里展开电量、上限和今晚的计划。只读鼠标位置，不要任何隐私权限。"),
+                      info: T("点一下刘海，从刘海里展开电量、上限和今晚的计划，再点一下收回去。只用鼠标，不要任何隐私权限。"),
                       isOn: $model.settings.notchIsland)
             ToggleRow(title: T("插拔电源时弹出"), info: nil, isOn: $model.settings.notchOnPower)
                 .disabled(!model.settings.notchIsland)
