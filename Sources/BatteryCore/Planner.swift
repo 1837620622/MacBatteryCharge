@@ -7,14 +7,17 @@ public enum LimitReason: Equatable, Sendable {
     case topUp
     case deadline
     case heat
+    /// 智能模式：平时停在日常上限。
+    case smart
 
     public var title: String {
         switch self {
-        case .schedule: return "按时间表"
-        case .gap: return "空档按 100%"
-        case .topUp: return "临时充满"
-        case .deadline: return "断电前充满"
-        case .heat: return "过热保护"
+        case .schedule: return T("按时间表")
+        case .gap: return T("空档按 100%")
+        case .topUp: return T("临时充满")
+        case .deadline: return T("离电前备电")
+        case .heat: return T("过热保护")
+        case .smart: return T("智能")
         }
     }
 }
@@ -88,7 +91,7 @@ public enum ChargePolicy {
 }
 
 public struct ChargePlan: Equatable, Sendable {
-    /// 时间表在断电前一分钟要的上限。
+    /// 离电时要到的电量。和日常充电上限分开，默认 100%。
     public var target: Int
     public var minutesToDeadline: Int
     /// 按充电速度，从现在的电量充到 target 要几分钟。
@@ -107,17 +110,34 @@ public enum ChargePlanner {
     /// 80% 到 100% 这一段的保守速度，大约一小时 20%。
     public static let defaultRate = 0.33
 
+    /// 离电目标允许的取值范围。和日常上限用同一组档位，但含义不同：这是离开电源那一刻要的电量。
+    public static let targetChoices = [80, 90, 100]
+    public static let defaultTarget = 100
+
+    public static func clampTarget(_ value: Int) -> Int {
+        if targetChoices.contains(value) { return value }
+        let clamped = min(100, max(80, value))
+        return targetChoices.min(by: { abs($0 - clamped) < abs($1 - clamped) }) ?? defaultTarget
+    }
+
     /// 只看断电前 window 分钟以内。只会比时间表更早放开，不会更晚。
+    /// target 是离电目标，和 schedule 里那一段的日常上限无关：日常上限 80% 的日子，离电目标照样可以是 100%。
     public static func plan(schedule: Schedule, minute: Int, percent: Int, deadline: ClockTime,
-                            rate learnedRate: Double?, margin: Int = 15, window: Int = 480) -> ChargePlan? {
+                            target targetValue: Int, rate learnedRate: Double?, margin: Int = 15,
+                            window: Int = 480) -> ChargePlan? {
         let toDeadline = ClockTime(minuteOfDay: minute).minutes(until: deadline)
         guard toDeadline > 0, toDeadline <= window else { return nil }
-        let target = schedule.limit(at: deadline.minuteOfDay - 1)
+        let target = clampTarget(targetValue)
         let rate = max(0.05, min(3, learnedRate ?? defaultRate))
         let need = max(0, target - percent)
         let needed = need == 0 ? 0 : Int((Double(need) / rate).rounded(.up))
 
-        if need == 0 || schedule.limit(at: minute) >= target {
+        if need == 0 {
+            return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: 0,
+                              liftNow: false, etaMinutes: 0, rate: rate, learned: learnedRate != nil)
+        }
+        // 时间表现在已经允许充到目标，不用提前放开。
+        if schedule.limit(at: minute) >= target {
             return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: needed,
                               liftNow: false, etaMinutes: needed, rate: rate, learned: learnedRate != nil)
         }
@@ -131,5 +151,31 @@ public enum ChargePlanner {
         let start = max(0, min(scheduledLift, latestStart))
         return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: needed,
                           liftNow: latestStart <= 0, etaMinutes: start + needed, rate: rate, learned: learnedRate != nil)
+    }
+
+    /// 智能模式用：没有时间表，只有一个平时停住的 `base`。到点就放开到目标，不会更早。
+    public static func plan(minute: Int, percent: Int, deadline: ClockTime, target targetValue: Int,
+                            base: Int, rate learnedRate: Double?, margin: Int = 15,
+                            window: Int = 480) -> ChargePlan? {
+        let toDeadline = ClockTime(minuteOfDay: minute).minutes(until: deadline)
+        guard toDeadline > 0, toDeadline <= window else { return nil }
+        let target = clampTarget(targetValue)
+        let rate = max(0.05, min(3, learnedRate ?? defaultRate))
+        let need = max(0, target - percent)
+        let needed = need == 0 ? 0 : Int((Double(need) / rate).rounded(.up))
+
+        if need == 0 {
+            return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: 0,
+                              liftNow: false, etaMinutes: 0, rate: rate, learned: learnedRate != nil)
+        }
+        // base 已经够高（比如日常上限就是 100），不用为离电再做什么。
+        if base >= target {
+            return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: needed,
+                              liftNow: false, etaMinutes: needed, rate: rate, learned: learnedRate != nil)
+        }
+        let latestStart = toDeadline - needed - margin
+        return ChargePlan(target: target, minutesToDeadline: toDeadline, minutesNeeded: needed,
+                          liftNow: latestStart <= 0, etaMinutes: max(0, latestStart) + needed,
+                          rate: rate, learned: learnedRate != nil)
     }
 }

@@ -34,6 +34,14 @@ struct Controls {
     var chargeKeys: [KeyWrite] = []
 }
 
+/// 是不是 Intel 机器。用运行时判断，Universal 或 Rosetta 下也不会走错分支。
+var isIntelMac: Bool {
+    var value: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    let ok = sysctlbyname("hw.optional.arm64", &value, &size, nil, 0) == 0 && value == 1
+    return !ok
+}
+
 /// 只探测一次。哪些键存在，决定这台机器用哪种方式。
 func probe() -> Controls {
     var controls = Controls()
@@ -44,22 +52,24 @@ func probe() -> Controls {
     } else if SMCHasKey("CH0I") {
         controls.adapterKeys = [("CH0I", [1], [0])]
     }
-    #if arch(x86_64)
-    // Intel：BCLM 是硬件里的充电上限（百分比）。有它就用它，不需要停充。
-    if SMCHasKey("BCLM") {
+    // BCLM 是 Intel 机器硬件里的充电上限（百分比）。按运行时判断，不看编译时的架构：
+    // 同一次构建在 Rosetta 下跑起来也是 x86_64，会去写只有 Intel 才有的键。
+    if isIntelMac, SMCHasKey("BCLM") {
         controls.chargeKind = .intelCeiling
         return controls
     }
-    #endif
-    if SMCHasKey("bfF0") && SMCHasKey("bfD0") && SMCHasKey("bfE0") {
-        // 新固件的上限由系统管。帮手不碰 bf* 键：它们的含义还没有公开资料确认。
-        controls.chargeKind = .system
-    } else if SMCHasKey("CH0B") && SMCHasKey("CH0C") {
+    // 有 bf* 的机器上限通常由系统管，但不等于没有别的路可走：
+    // 所以先记下 .system，接着往下探，探到 CH0B/CH0C 或 CHTE 就用它们，真的没有才回到 .system。
+    let hasSystemKeys = SMCHasKey("bfF0") && SMCHasKey("bfD0") && SMCHasKey("bfE0")
+    if SMCHasKey("CH0B") && SMCHasKey("CH0C") {
         controls.chargeKind = .direct
         controls.chargeKeys = [("CH0B", [2], [0]), ("CH0C", [2], [0])]
     } else if SMCHasKey("CHTE") {
         controls.chargeKind = .direct
         controls.chargeKeys = [("CHTE", [1, 0, 0, 0], [0, 0, 0, 0])]
+    } else if hasSystemKeys {
+        // 帮手不碰 bf* 键：它们的含义还没有公开资料确认。这一台的充电上限只能靠系统自己管。
+        controls.chargeKind = .system
     }
     return controls
 }
@@ -246,6 +256,10 @@ func serve() {
             var timeout = timeval(tv_sec: 3, tv_usec: 0)
             setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
             setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            // 客户端 3 秒超时后会先 close，那时候这里的 write 会吃到 SIGPIPE，默认动作是杀掉进程。
+            // 帮手是被 launchd 看活的，被杀会中断放电、并把电源接回去，所以这一行是必需的。
+            var noSigPipe: Int32 = 1
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
             var uid: uid_t = 0
             var gid: gid_t = 0
             guard getpeereid(client, &uid, &gid) == 0, uid == allowedUID || uid == 0 else {
@@ -261,7 +275,16 @@ func serve() {
             } else {
                 response = HelperCoding.line(HelperStatus(version: appVersion, adapterControl: false, chargeControl: .none, error: "看不懂的请求"))
             }
-            response.withUnsafeBytes { _ = write(client, $0.baseAddress, $0.count) }
+            // 短写要接着写，不能只调用一次就丢掉剩下的。
+            response.withUnsafeBytes { buffer in
+                guard let base = buffer.baseAddress else { return }
+                var sent = 0
+                while sent < buffer.count {
+                    let written = write(client, base + sent, buffer.count - sent)
+                    if written <= 0 { break }
+                    sent += written
+                }
+            }
             close(client)
         }
     }

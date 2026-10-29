@@ -40,6 +40,7 @@ jobs:
 
       - name: Window open CPU
         run: |
+          set -euo pipefail
           app="build/arm64/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
           [[ "$(uname -m)" == arm64 ]] || app="build/intel/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
           "$app" --bench-live
@@ -64,6 +65,8 @@ jobs:
           name: MacBatteryCharge
           path: dist/*
 
+      # 同一个版本号只发一次。VERSION 没改就推 main（比如修文档、改 CI），
+      # 不再悄悄替换已经发出去的安装包：同版本号的两份二进制对用户和校验都没法分辨。
       - name: Publish release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -71,8 +74,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release upload "v$VERSION" dist/* --clobber
-          else
-            gh release create "v$VERSION" dist/* --title "v$VERSION" --notes-file packaging/release-notes.md
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION 不是三段版本号：$VERSION"; exit 1
           fi
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION 已经发布过，跳过。要发新包请先改 VERSION。"
+            exit 0
+          fi
+          gh release create "v$VERSION" dist/* --title "v$VERSION" --notes-file packaging/release-notes.md

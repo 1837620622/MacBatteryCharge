@@ -62,7 +62,7 @@ struct GuideView: View {
         HStack(spacing: 12) {
             AppGlyph(size: 44)
             VStack(alignment: .leading, spacing: 3) {
-                Text("欢迎使用充电上限").font(.title2.weight(.semibold))
+                Text(T("欢迎使用充电上限")).font(.title2.weight(.semibold))
                 Text(GuideCopy.intro)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -83,7 +83,7 @@ struct GuideView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("第 \(step + 1) 步的示意动画")
+        .accessibilityLabel(T("第 %@ 步的示意动画", ["\(step + 1)"]))
     }
 
     static let period = 2.8
@@ -100,7 +100,7 @@ struct GuideView: View {
                     .frame(width: 7, height: 7)
                     .contentShape(Rectangle().inset(by: -4))
                     .onTapGesture { go(to: index) }
-                    .accessibilityLabel("第 \(index + 1) 步")
+                    .accessibilityLabel(T("第 %@ 步", ["\(index + 1)"]))
                     .accessibilityAddTraits(index == step ? [.isButton, .isSelected] : .isButton)
             }
         }
@@ -108,15 +108,15 @@ struct GuideView: View {
 
     private var buttons: some View {
         HStack(spacing: 10) {
-            Button("上一步") { go(to: step - 1) }
+            Button(T("上一步")) { go(to: step - 1) }
                 .disabled(step == 0)
                 .keyboardShortcut(.leftArrow, modifiers: [])
             Spacer()
             if step < count - 1 {
-                Button("跳过") { model.finishGuide() }
+                Button(T("跳过")) { model.finishGuide() }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
-                Button("下一步") { go(to: step + 1) }
+                Button(T("下一步")) { go(to: step + 1) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             } else {
@@ -221,7 +221,7 @@ private struct MoveFrame: View {
                         .font(.system(size: 54))
                         .foregroundStyle(Color.accentColor.opacity(0.85))
                         .scaleEffect(1 + 0.08 * sin(drop * .pi))
-                    Text("应用程序").font(.caption).foregroundStyle(.secondary)
+                    Text(T("应用程序")).font(.caption).foregroundStyle(.secondary)
                 }
                 .offset(x: 70)
 
@@ -238,7 +238,7 @@ private struct MoveFrame: View {
                     .offset(x: 96, y: -26)
             }
             .frame(height: 96)
-            FrameCaption(text: "拖进去，或者用 PKG 装好")
+            FrameCaption(text: T("拖进去，或者用 PKG 装好"))
         }
     }
 }
@@ -280,20 +280,20 @@ private struct MenuBarFrame: View {
         let charged = phase >= 0.5
         let click = 1 - abs(phase - 0.5) / 0.08
         VStack(spacing: 0) {
-            MenuBarStrip(top: charged ? "100%" : "80%", bottom: charged ? "充电" : "接通",
+            MenuBarStrip(top: charged ? "100%" : "80%", bottom: charged ? T("充电") : T("接通"),
                          level: charged ? 0.82 : 0.8, charging: charged, highlight: max(0, click)) {
                 Image(systemName: "applelogo").font(.system(size: 13))
-                Text("访达").font(.system(size: 12, weight: .semibold))
+                Text(T("访达")).font(.system(size: 12, weight: .semibold))
             }
             Spacer(minLength: 0)
             HStack(alignment: .top, spacing: 18) {
-                Label("上：现在的上限", systemImage: "arrow.up")
-                Label("下：充电 / 放电 / 接通", systemImage: "arrow.down")
+                Label(T("上：现在的上限"), systemImage: "arrow.up")
+                Label(T("下：充电 / 放电 / 接通"), systemImage: "arrow.down")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            FrameCaption(text: charged ? "21:00 起 100%，开始充电" : "06:00 起 80%，停在上限")
+            FrameCaption(text: charged ? T("21:00 起 100%，开始充电") : T("06:00 起 80%，停在上限"))
                 .padding(.bottom, 14)
         }
     }
@@ -310,7 +310,7 @@ private struct NotchFrame: View {
             ZStack(alignment: .top) {
                 Rectangle().fill(.bar).frame(height: 26)
                     .overlay(alignment: .bottom) { Divider() }
-                Image(nsImage: MenuBarIcon.image(top: "80%", bottom: "接通", level: 0.8, charging: false))
+                Image(nsImage: MenuBarIcon.image(top: "80%", bottom: T("接通"), level: 0.8, charging: false))
                     .renderingMode(.template)
                     .foregroundStyle(.primary)
                     .frame(height: 26)
@@ -330,10 +330,10 @@ private struct NotchFrame: View {
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(holding ? 0.2 : 0.08)))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5))
                     .scaleEffect(holding ? 0.95 : 1)
-                Text("按住 ⌘ 拖").font(.callout)
+                Text(T("按住 ⌘ 拖")).font(.callout)
             }
             Spacer(minLength: 0)
-            FrameCaption(text: "放到刘海左边或右边，松手后会记住")
+            FrameCaption(text: T("放到刘海左边或右边，松手后会记住"))
                 .padding(.bottom, 14)
         }
     }
@@ -353,7 +353,7 @@ private struct PasswordFrame: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("充电上限要按这一段的设置修改低电量模式。")
+                    Text(T("充电上限要按这一段的设置修改低电量模式。"))
                         .font(.caption.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 3) {
@@ -371,11 +371,11 @@ private struct PasswordFrame: View {
                     .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1))
                     HStack(spacing: 6) {
                         Spacer(minLength: 0)
-                        Text("取消")
+                        Text(T("取消"))
                             .font(.caption)
                             .padding(.horizontal, 10).padding(.vertical, 3)
                             .background(Capsule().fill(Color.primary.opacity(0.1)))
-                        Text("好")
+                        Text(T("好"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14).padding(.vertical, 3)
@@ -389,7 +389,7 @@ private struct PasswordFrame: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
-            FrameCaption(text: "系统的密码框，只在这两件事时出现")
+            FrameCaption(text: T("系统的密码框，只在这两件事时出现"))
         }
     }
 }
@@ -405,7 +405,7 @@ private struct LimitFrame: View {
         VStack(spacing: 10) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(high ? "21:00 – 次日 06:00" : "06:00 – 21:00")
+                    Text(high ? T("21:00 – 次日 06:00") : "06:00 – 21:00")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(limit)%")
@@ -432,7 +432,7 @@ private struct LimitFrame: View {
                     }
                 }
             }
-            FrameCaption(text: "只有支持的 Mac 会写上")
+            FrameCaption(text: T("只有支持的 Mac 会写上"))
         }
     }
 }
@@ -456,7 +456,7 @@ private struct HoldFrame: View {
                         path.addLine(to: CGPoint(x: width, y: y(80)))
                     }
                     .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    Text("上限 80%")
+                    Text(T("上限 80%"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .offset(x: 4, y: y(80) + 3)
@@ -480,7 +480,7 @@ private struct HoldFrame: View {
                 }
             }
             .frame(width: 270, height: 80)
-            FrameCaption(text: "放到 80% 停住，再由电源直接供电")
+            FrameCaption(text: T("放到 80% 停住，再由电源直接供电"))
         }
     }
 }

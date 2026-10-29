@@ -29,7 +29,7 @@ public struct LowPowerState: Equatable, Sendable {
 
     public var text: String {
         if let choice { return choice.shortTitle }
-        return "仅接电源"
+        return T("仅接电源")
     }
 
     /// 解析 `pmset -g custom`：要同时有 Battery Power 和 AC Power 两段。

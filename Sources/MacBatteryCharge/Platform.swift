@@ -32,7 +32,7 @@ enum LoginItem {
     @discardableResult
     static func sync(enabled: Bool) -> String? {
         guard Installation.isInApplications else {
-            return enabled ? "放进“应用程序”后，登录时才会自己打开。" : nil
+            return enabled ? T("放进“应用程序”后，登录时才会自己打开。") : nil
         }
         let service = SMAppService.mainApp
         do {
@@ -42,10 +42,10 @@ enum LoginItem {
                 try service.unregister()
             }
         } catch {
-            if enabled && service.status == .requiresApproval { return "要在系统设置的“登录项”里允许。" }
-            return "登录项没有改好：\(error.localizedDescription)"
+            if enabled && service.status == .requiresApproval { return T("要在系统设置的“登录项”里允许。") }
+            return T("登录项没有改好：%@", ["\(error.localizedDescription)"])
         }
-        if enabled && service.status == .requiresApproval { return "要在系统设置的“登录项”里允许。" }
+        if enabled && service.status == .requiresApproval { return T("要在系统设置的“登录项”里允许。") }
         return nil
     }
 
@@ -122,7 +122,7 @@ enum Installation {
             try fm.copyItem(at: source, to: target)
         } catch {
             let script = "/bin/rm -rf \(Shell.quoted(target.path)); /usr/bin/ditto \(Shell.quoted(source.path)) \(Shell.quoted(target.path))"
-            switch Shell.runAsAdmin(script, prompt: "充电上限要放进“应用程序”。") {
+            switch Shell.runAsAdmin(script, prompt: T("充电上限要放进“应用程序”。")) {
             case .ok: break
             case .cancelled: return .failure(.cancelled)
             case .failed(let text): return .failure(.failed(text))
@@ -138,7 +138,7 @@ enum Installation {
 
         var message: String {
             switch self {
-            case .cancelled: return "已取消"
+            case .cancelled: return T("已取消")
             case .failed(let text): return text
             }
         }
@@ -168,7 +168,7 @@ enum Installation {
                 try FileManager.default.trashItem(at: target, resultingItemURL: nil)
             } catch {
                 let script = "/bin/rm -rf \(Shell.quoted(target.path)); /usr/sbin/pkgutil --forget com.macbatterycharge.pkg >/dev/null 2>&1; true"
-                switch Shell.runAsAdmin(script, prompt: "充电上限要从“应用程序”里删掉自己。") {
+                switch Shell.runAsAdmin(script, prompt: T("充电上限要从“应用程序”里删掉自己。")) {
                 case .ok: continue
                 case .cancelled: return .failure(.cancelled)
                 case .failed(let text): return .failure(.failed(text))

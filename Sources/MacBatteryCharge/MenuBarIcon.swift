@@ -58,9 +58,10 @@ enum MenuBarIcon {
         bolt.close()
         context.saveGraphicsState()
         context.compositingOperation = .destinationOut
-        let halo = bolt.copy() as! NSBezierPath
-        halo.lineWidth = 2
-        halo.stroke()
+        if let halo = bolt.copy() as? NSBezierPath {
+            halo.lineWidth = 2
+            halo.stroke()
+        }
         context.restoreGraphicsState()
         bolt.fill()
     }

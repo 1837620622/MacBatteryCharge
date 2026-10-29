@@ -55,7 +55,7 @@ struct DayDial: View {
                 }
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(percent.map { "电量 \($0)%，上限 \(limit)%。时间表在外圈，可以点一段来改。" } ?? "没有电池")
+        .accessibilityLabel(percent.map { T("电量 %@%，上限 %@%。时间表在外圈，可以点一段来改。", ["\($0)", "\(limit)"]) } ?? T("没有电池"))
     }
 
     private var tint: Color {

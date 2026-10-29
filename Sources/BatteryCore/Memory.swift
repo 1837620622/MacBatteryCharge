@@ -23,11 +23,11 @@ public struct MemorySnapshot: Equatable, Sendable {
 
     public var pressureText: String {
         switch pressure {
-        case 1: return "正常"
-        case 2: return "偏紧"
-        case 4: return "紧张"
-        case 8: return "严重"
-        default: return "未知"
+        case 1: return T("正常")
+        case 2: return T("偏紧")
+        case 4: return T("紧张")
+        case 8: return T("严重")
+        default: return T("未知")
         }
     }
 
@@ -43,7 +43,7 @@ public struct MemorySnapshot: Equatable, Sendable {
 
     /// 读数一行：「6.2 / 16.0 GB · 正常」。
     public var summary: String {
-        guard totalBytes > 0 else { return "没有读到" }
+        guard totalBytes > 0 else { return T("没有读到") }
         return "\(Self.bytesText(usedBytes)) / \(Self.bytesText(totalBytes)) · \(pressureText)"
     }
 }

@@ -22,9 +22,9 @@ enum UpdateCheck {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw UpdateError("GitHub 没有返回版本信息")
+            throw UpdateError(T("GitHub 没有返回版本信息"))
         }
-        guard let release = ReleaseInfo.parse(data) else { throw UpdateError("版本信息看不懂") }
+        guard let release = ReleaseInfo.parse(data) else { throw UpdateError(T("版本信息看不懂")) }
         return release
     }
 
@@ -83,7 +83,7 @@ final class PackageDownloader: NSObject, URLSessionDownloadDelegate, @unchecked 
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         if let http = downloadTask.response as? HTTPURLResponse, http.statusCode != 200 {
-            return finish(.failure(UpdateError("下载失败（\(http.statusCode)）")))
+            return finish(.failure(UpdateError(T("下载失败（%@）", ["\(http.statusCode)"]))))
         }
         do {
             let fm = FileManager.default

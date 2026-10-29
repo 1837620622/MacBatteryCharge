@@ -2,6 +2,11 @@ import XCTest
 @testable import BatteryCore
 
 final class AppearanceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testLookDefaultsAndRoundTrip() throws {
         var settings = AppSettings()
         XCTAssertEqual(settings.look, .frosted)

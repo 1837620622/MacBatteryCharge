@@ -7,13 +7,46 @@ LABEL="com.macbatterycharge.helper"
 BIN="/Library/PrivilegedHelperTools/$LABEL"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 
+# 只换我们已经装过的那个帮手，别把别的东西升格成 root 常驻。
 if [ -f "$PLIST" ] && [ -x "$HELPER_SRC" ]; then
+    # 帮手是随包一起 ad-hoc 签名的。验一下再复制：包被改过就跳过，不给它 root。
+    if ! /usr/bin/codesign --verify --strict "$HELPER_SRC" >/dev/null 2>&1; then
+        /usr/bin/logger -t macbatterycharge "helper signature check failed, skipped"
+        exit 0
+    fi
     VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null)"
     /bin/launchctl bootout "system/$LABEL" 2>/dev/null
-    /bin/cp "$HELPER_SRC" "$BIN" && /usr/sbin/chown root:wheel "$BIN" && /bin/chmod 755 "$BIN"
-    /usr/bin/xattr -cr "$BIN" 2>/dev/null
+    # 等旧帮手自己退出（它在 SIGTERM 里会把电源接回来）。
+    # 先 rm 再 cp：直接覆盖正在运行的二进制可能让它崩在复位之前。
+    i=0
+    while /usr/bin/pgrep -f "$BIN" >/dev/null 2>&1 && [ "$i" -lt 30 ]; do
+        /bin/sleep 0.1
+        i=$((i + 1))
+    done
+    /bin/rm -f "$BIN"
+    if /bin/cp "$HELPER_SRC" "$BIN"; then
+        /usr/sbin/chown root:wheel "$BIN"
+        /bin/chmod 755 "$BIN"
+        /usr/bin/xattr -cr "$BIN" 2>/dev/null
+    else
+        /usr/bin/logger -t macbatterycharge "helper copy failed"
+        exit 0
+    fi
+    # 版本号紧跟在 --app-version 后面，直接改这一对，不靠数组下标：
+    # 以后 ProgramArguments 加参数也不会静默写到别的位置上。
     if [ -n "$VERSION" ]; then
-        /usr/libexec/PlistBuddy -c "Set :ProgramArguments:4 $VERSION" "$PLIST" 2>/dev/null
+        /bin/cp "$PLIST" "$PLIST.old" 2>/dev/null
+        /usr/bin/sed -E "s#(<string>--app-version</string>[[:space:]]*<string>)[^<]*(</string>)#\\1${VERSION}\\2#" \
+            "$PLIST.old" > "$PLIST" 2>/dev/null
+        if /usr/bin/grep -q "<string>${VERSION}</string>" "$PLIST" 2>/dev/null; then
+            /bin/rm -f "$PLIST.old"
+        else
+            # 改不动就用旧的，至少帮手还能跑起来。
+            /bin/mv -f "$PLIST.old" "$PLIST" 2>/dev/null
+            /usr/bin/logger -t macbatterycharge "could not update helper version in plist"
+        fi
+        /usr/sbin/chown root:wheel "$PLIST" 2>/dev/null
+        /bin/chmod 644 "$PLIST" 2>/dev/null
     fi
     /bin/launchctl bootstrap system "$PLIST" 2>/dev/null
 fi

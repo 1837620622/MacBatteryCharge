@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
+        Log.installCrashHandler()
+        Log.beginSession()
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(showFromOtherProcess(_:)), name: showWindowNotification, object: nil)
         setUpStatusItem()
         watchPower()
@@ -60,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         model.saveNow()
         model.releaseHelper()
+        Log.endSession()
     }
 
     @objc private func showFromOtherProcess(_ notification: Notification) {
@@ -92,8 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                              level: battery.percent.map { Double($0) / 100 },
                                              charging: battery.flow == .charging)
         }
-        let percent = battery.percent.map { "电量 \($0)%，" } ?? ""
-        button.setAccessibilityLabel("充电上限 \(model.menuTop)，\(percent)\(model.menuBottom)")
+        let percent = battery.percent.map { T("电量 %@%，", ["\($0)"]) } ?? ""
+        button.setAccessibilityLabel(T("充电上限 %@，%@%@", ["\(model.menuTop)", "\(percent)", "\(model.menuBottom)"]))
         button.toolTip = "\(model.limitLine)\n\(model.statusTitle)"
     }
 
@@ -109,19 +112,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func showMenu(from button: NSStatusBarButton) {
         let menu = NSMenu()
         let battery = model.battery
-        let header = NSMenuItem(title: battery.percent.map { "电量 \($0)% · \(model.limitLine)" } ?? model.limitLine, action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: battery.percent.map { T("电量 %@% · %@", ["\($0)", "\(model.limitLine)"]) } ?? model.limitLine, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
-        menu.addItem(withTitle: "打开窗口", action: #selector(openFromMenu), keyEquivalent: "").target = self
-        let topUp = menu.addItem(withTitle: model.topUpActive ? "结束临时充满" : "临时充满到 100%", action: #selector(toggleTopUp), keyEquivalent: "")
+        menu.addItem(withTitle: T("打开窗口"), action: #selector(openFromMenu), keyEquivalent: "").target = self
+        let topUp = menu.addItem(withTitle: model.topUpActive ? T("结束临时充满") : T("临时充满到 100%"), action: #selector(toggleTopUp), keyEquivalent: "")
         topUp.target = self
         topUp.isEnabled = battery.present
-        let apply = menu.addItem(withTitle: "立即应用", action: #selector(applyFromMenu), keyEquivalent: "")
+        let apply = menu.addItem(withTitle: T("立即应用"), action: #selector(applyFromMenu), keyEquivalent: "")
         apply.target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "关于充电上限", action: #selector(showAbout), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "退出充电上限", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: T("关于充电上限"), action: #selector(showAbout), keyEquivalent: "").target = self
+        menu.addItem(withTitle: T("退出充电上限"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
@@ -133,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func showAbout() {
         if #available(macOS 14, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
         let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11)]
-        let credits = NSMutableAttributedString(string: "作者 \(AppInfo.author)\n", attributes: small)
+        let credits = NSMutableAttributedString(string: T("作者 %@", ["\(AppInfo.author)"]) + "\n", attributes: small)
         var link = small
         link[.link] = AppInfo.homepage
         credits.append(NSAttributedString(string: AppInfo.homepage.absoluteString, attributes: link))
@@ -171,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 760),
                               styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.title = "充电上限"
+        window.title = T("充电上限")
         window.titlebarAppearsTransparent = true
         // 底色由界面自己画：纯色就是不透明的窗口色，磨砂和玻璃是模糊的桌面。
         window.isOpaque = false

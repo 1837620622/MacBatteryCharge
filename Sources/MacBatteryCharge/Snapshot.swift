@@ -12,12 +12,12 @@ enum Snapshot {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
-            print("建不了目录：\(error.localizedDescription)")
+            print(T("建不了目录：%@", ["\(error.localizedDescription)"]))
             return false
         }
 
         var ok = true
-        let folds = ["top", "bottom", "history", "schedule", "helper", "smart", "look", "system"]
+        let folds = ["top", "bottom", "mode", "journal", "language", "history", "schedule", "helper", "smart", "look", "support", "system"]
         func setFolds(_ values: [String: Bool]) {
             for key in folds { UserDefaults.standard.set(values[key] ?? true, forKey: "fold.\(key)") }
         }
@@ -67,7 +67,7 @@ enum Snapshot {
             }
             ok = writeMenuBar(dark: appearance == .darkAqua, to: file("menubar-\(name).png")) && ok
         }
-        print(ok ? "截图在 \(directory.path)" : "有截图没画出来")
+        print(ok ? T("截图在 %@", ["\(directory.path)"]) : T("有截图没画出来"))
         return ok
     }
 
@@ -181,7 +181,7 @@ enum Snapshot {
             .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light))
         renderer.scale = 2
         guard let image = renderer.cgImage else {
-            print("画不出 \(url.lastPathComponent)")
+            print(T("画不出 %@", ["\(url.lastPathComponent)"]))
             return false
         }
         let rep = NSBitmapImageRep(cgImage: image)
@@ -211,11 +211,11 @@ enum Snapshot {
     @MainActor
     static func writeMenuBar(dark: Bool, to url: URL) -> Bool {
         let states: [(String, String, Double?, Bool)] = [
-            ("80%", "接通", 0.8, false),
-            ("100%", "充电", 0.86, true),
-            ("80%", "电池", 0.62, false),
-            ("100%", "放电", 0.35, false),
-            ("—", "无电池", nil, false),
+            ("80%", T("接通"), 0.8, false),
+            ("100%", T("充电"), 0.86, true),
+            ("80%", T("电池"), 0.62, false),
+            ("100%", T("放电"), 0.35, false),
+            ("—", T("无电池"), nil, false),
         ]
         let icons = states.map { MenuBarIcon.image(top: $0.0, bottom: $0.1, level: $0.2, charging: $0.3) }
         let gap: CGFloat = 18
@@ -253,7 +253,7 @@ enum Snapshot {
             try data.write(to: url)
             return true
         } catch {
-            print("存不了 \(url.lastPathComponent)：\(error.localizedDescription)")
+            print(T("存不了 %@：%@", ["\(url.lastPathComponent)", "\(error.localizedDescription)"]))
             return false
         }
     }

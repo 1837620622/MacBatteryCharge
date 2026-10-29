@@ -40,7 +40,7 @@ public struct ClockTime: Hashable, Comparable, Codable, Sendable {
         let container = try decoder.singleValueContainer()
         let text = try container.decode(String.self)
         guard let value = ClockTime(text: text) else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "时间要写成 HH:mm")
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: T("时间要写成 HH:mm"))
         }
         self = value
     }
@@ -59,17 +59,17 @@ public enum LowPowerChoice: String, CaseIterable, Codable, Sendable {
 
     public var title: String {
         switch self {
-        case .off: return "这段不用"
-        case .on: return "这段一直开"
-        case .battery: return "仅用电池时开"
+        case .off: return T("这段不用")
+        case .on: return T("这段一直开")
+        case .battery: return T("仅用电池时开")
         }
     }
 
     public var shortTitle: String {
         switch self {
-        case .off: return "不用"
-        case .on: return "一直开"
-        case .battery: return "仅电池"
+        case .off: return T("不用")
+        case .on: return T("一直开")
+        case .battery: return T("仅电池")
         }
     }
 
@@ -159,7 +159,7 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
     }
 
     public var rangeText: String {
-        wrapsMidnight ? "\(start.text) – 次日 \(end.text)" : "\(start.text) – \(end.text)"
+        wrapsMidnight ? T("%@ – 次日 %@", ["\(start.text)", "\(end.text)"]) : "\(start.text) – \(end.text)"
     }
 }
 
@@ -171,10 +171,10 @@ public enum ScheduleError: Error, Equatable, Sendable {
 
     public var message: String {
         switch self {
-        case .tooMany: return "最多 \(Schedule.maxIntervals) 个时间段"
-        case .sameStartEnd(let n): return "第 \(n) 段的开始和结束不能相同"
-        case .badLimit(let n): return "第 \(n) 段的上限只能是 80、85、90、95 或 100"
-        case .overlap(let a, let b): return "第 \(a) 段和第 \(b) 段有重叠"
+        case .tooMany: return T("最多 %@ 个时间段", ["\(Schedule.maxIntervals)"])
+        case .sameStartEnd(let n): return T("第 %@ 段的开始和结束不能相同", ["\(n)"])
+        case .badLimit(let n): return T("第 %@ 段的上限只能是 80、85、90、95 或 100", ["\(n)"])
+        case .overlap(let a, let b): return T("第 %@ 段和第 %@ 段有重叠", ["\(a)", "\(b)"])
         }
     }
 }
@@ -231,9 +231,9 @@ public struct Schedule: Equatable, Sendable {
 
     /// 窗口上的一句话：「06:00 起 80% · 21:00 起 100% · 23:30 断电」。
     public func dayLine(deadline: ClockTime?) -> String {
-        var parts = intervals.sorted { $0.start < $1.start }.map { "\($0.start.text) 起 \($0.limit)%" }
-        if let deadline { parts.append("\(deadline.text) 断电") }
-        return parts.isEmpty ? "全天 100%" : parts.joined(separator: " · ")
+        var parts = intervals.sorted { $0.start < $1.start }.map { T("%@ 起 %@%", ["\($0.start.text)", "\($0.limit)"]) }
+        if let deadline { parts.append(T("%@ 断电", ["\(deadline.text)"])) }
+        return parts.isEmpty ? T("全天 100%") : parts.joined(separator: " · ")
     }
 
     public struct Change: Equatable, Sendable {
@@ -297,10 +297,11 @@ public struct Schedule: Equatable, Sendable {
         return nil
     }
 
-    /// 06:00 来电后放到并停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
+    /// 06:00 来电后停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
+    /// 主动放电默认关：用户只装了这个软件时，不应该在不知情的时候看着电量往下掉。
     public static func makeDefaults() -> [Interval] {
         [
-            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, lowPower: .off, discharge: true),
+            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, lowPower: .off),
             Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100, lowPower: .battery),
         ]
     }
