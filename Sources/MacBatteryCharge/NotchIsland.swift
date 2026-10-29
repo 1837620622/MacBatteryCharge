@@ -215,7 +215,11 @@ final class NotchIsland {
     private func setExpanded(_ value: Bool) {
         guard state.expanded != value else { return }
         panel?.ignoresMouseEvents = !value
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { state.expanded = value }
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            state.expanded = value
+        } else {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { state.expanded = value }
+        }
     }
 
     private func openWindow() {
