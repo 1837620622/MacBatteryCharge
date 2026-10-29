@@ -2,7 +2,7 @@
 
 Mac 菜单栏里的电池软件，按你的作息设充电上限。白天停在 80% 左右，晚上放开到 100%，断电前按这台机器自己的充电速度充满。
 
-**状态：3.0.0。** 在 macOS 26 上用 Swift 和 SwiftUI 重写，并且编译、单元测试、打包都在 CI 里通过。充电上限、放电、Intel 的 BCLM 还没有在真机上完整测过，见 [诚实的限制](#诚实的限制)。
+**状态：3.0.1。** 在 macOS 26 上用 Swift 和 SwiftUI 重写，并且编译、单元测试、打包都在 CI 里通过。充电上限、放电、Intel 的 BCLM 还没有在真机上完整测过，见 [诚实的限制](#诚实的限制)。
 
 ## 为什么做
 
@@ -42,8 +42,8 @@ macOS 27 和 Intel 上的 BCLM 还没有在真机上验证。
 
 从 [Releases](https://github.com/1837620622/MacBatteryCharge/releases) 下载对应芯片的文件：
 
-- Apple 芯片：`MacBatteryCharge-3.0.0-arm64.pkg`（或 `.dmg`）
-- Intel：`MacBatteryCharge-3.0.0-intel.pkg`（或 `.dmg`）
+- Apple 芯片：`MacBatteryCharge-3.0.1-arm64.pkg`（或 `.dmg`）
+- Intel：`MacBatteryCharge-3.0.1-intel.pkg`（或 `.dmg`）
 
 PKG 会装到“应用程序”。DMG 打开后把软件拖进“应用程序”。从磁盘映像直接打开，登录时不会自己启动，窗口里会提示放进“应用程序”。
 

@@ -1,4 +1,4 @@
-用 Swift 和 SwiftUI 重写的 3.0.0。最低支持 macOS 13。
+3.0.1：换了新的 App 图标，功能和 3.0.0 相同。用 Swift 和 SwiftUI 重写，最低支持 macOS 13。
 
 **主要变化**
 
