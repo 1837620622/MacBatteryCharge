@@ -26,9 +26,15 @@ for pkg in "${packages[@]}"; do
     grep -q 'Welcome.html' "$dist_xml" || fail "${name}：安装器没有欢迎页"
     grep -q 'rootVolumeOnly' "$dist_xml" || fail "${name}：没有限制装在系统盘"
     grep -q 'hostArchitectures' "$dist_xml" || fail "${name}：没有写架构限制"
-    for file in background.png Welcome.html Conclusion.html AppIcon.png \
+    # 出错时把资源目录列出来，方便看到底少了什么。
+    show_resources() { find "$tmp/x/Resources" | sort | head -60; }
+    for file in background.png Welcome.html Conclusion.html \
         en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
-        [[ -f "$tmp/x/Resources/$file" ]] || fail "${name}：缺 Resources/$file"
+        [[ -f "$tmp/x/Resources/$file" ]] || { show_resources; fail "${name}：缺 Resources/$file"; }
+    done
+    # 图标嵌在欢迎页里，不靠附带的图片文件。
+    for page in Welcome.html en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
+        grep -q 'data:image/png;base64,' "$tmp/x/Resources/$page" || { show_resources; fail "${name}：$page 里没有嵌入图标"; }
     done
 
     app_info="$(find "$tmp/x" -path '*/MacBatteryCharge.app/Contents/Info.plist' -print -quit)"

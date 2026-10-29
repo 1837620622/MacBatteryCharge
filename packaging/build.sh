@@ -35,13 +35,17 @@ INSTALLER="$ROOT/build/installer"
 rm -rf "$INSTALLER"
 mkdir -p "$INSTALLER"
 sips -z 128 128 resources/AppIcon.png --out "$INSTALLER/background.png" >/dev/null
+sips -z 144 144 resources/AppIcon.png --out "$INSTALLER/icon-144.png" >/dev/null
 for lang in "${LANGS[@]}"; do
     mkdir -p "$INSTALLER/$lang.lproj"
     cp packaging/installer/"$lang".lproj/*.html "$INSTALLER/$lang.lproj/"
-    cp resources/AppIcon.png "$INSTALLER/$lang.lproj/AppIcon.png"
 done
 cp packaging/installer/en.lproj/Welcome.html packaging/installer/en.lproj/Conclusion.html "$INSTALLER/"
-cp resources/AppIcon.png "$INSTALLER/AppIcon.png"
+# 页面里的图标直接嵌进 HTML，不依赖安装器怎么拷贝附带的图片。
+for page in "$INSTALLER"/*.html "$INSTALLER"/*.lproj/*.html; do
+    python3 packaging/embed-icon.py "$page" "$INSTALLER/icon-144.png"
+done
+rm -f "$INSTALLER/icon-144.png"
 
 # DMG 卷图标要求根目录的 Finder 信息里有「自定义图标」这一位（和 SetFile -a C 写的是同一位）。
 # FinderInfo 第 8、9 个字节的 0x0400 就是它。
