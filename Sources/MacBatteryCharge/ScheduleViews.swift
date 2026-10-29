@@ -14,7 +14,7 @@ struct ScheduleEditor: View {
                 Button(T("恢复默认")) { model.resetSchedule() }
                     .controlSize(.small)
             }
-            Text(T("每一段停在这里的上限。没排到的时间按 100% 充。"))
+            Text(T("每一段时间里，电池停在你选的数字。没排到的时间充到 100%。"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
             ForEach($model.settings.intervals) { binding in
@@ -52,12 +52,14 @@ struct IntervalRow: View {
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .fixedSize()
+                .environment(\.locale, ClockPicker.locale)
             Text("–")
                 .foregroundStyle(.secondary)
             DatePicker("", selection: ClockPicker.binding($item.end), displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .fixedSize()
+                .environment(\.locale, ClockPicker.locale)
             Picker("", selection: $item.limit) {
                 ForEach(Schedule.allowedLimits, id: \.self) { value in
                     Text("\(value)%").tag(value)

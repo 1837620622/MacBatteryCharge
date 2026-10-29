@@ -48,6 +48,7 @@ struct SmartPanel: View {
                                        displayedComponents: .hourAndMinute)
                                 .datePickerStyle(.compact)
                                 .fixedSize()
+                                .environment(\.locale, ClockPicker.locale)
                         }
                         if model.learnedCount > 0 {
                             Button(T("重新学习")) { model.forgetHabits() }
@@ -100,6 +101,7 @@ struct FixedPanel: View {
                                displayedComponents: .hourAndMinute)
                         .datePickerStyle(.compact)
                         .fixedSize()
+                        .environment(\.locale, ClockPicker.locale)
                     Picker(T("充到"), selection: $model.settings.unplugTarget) {
                         ForEach(ChargePlanner.targetChoices, id: \.self) { value in
                             Text("\(value)%").tag(value)

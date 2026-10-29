@@ -56,6 +56,7 @@ struct GuideView: View {
                     .labelsHidden()
                     .datePickerStyle(.compact)
                     .fixedSize()
+                    .environment(\.locale, ClockPicker.locale)
             }
             Text(T("随便填一个就行，之后会自己学。"))
                 .font(.caption)

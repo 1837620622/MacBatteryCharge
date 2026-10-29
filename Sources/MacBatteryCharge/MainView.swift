@@ -237,4 +237,13 @@ enum ClockPicker {
     static func binding(_ time: Binding<ClockTime>) -> Binding<Date> {
         Binding(get: { date(time.wrappedValue) }, set: { time.wrappedValue = clock($0) })
     }
+
+    /// 时间选择器的语言跟着界面语言走，不跟着系统。系统是英文、界面是中文时，时间也不该显示成 AM/PM。
+    static var locale: Locale {
+        switch Lang.resolved {
+        case .zh: return Locale(identifier: "zh_CN")
+        case .zhHant: return Locale(identifier: "zh_TW")
+        case .en, .auto: return Locale(identifier: "en_US")
+        }
+    }
 }
