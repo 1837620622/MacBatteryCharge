@@ -389,7 +389,7 @@ private struct PasswordFrame: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
-            FrameCaption(text: "系统自己的密码框：装放电帮手、改低电量时才出现")
+            FrameCaption(text: "系统的密码框，只在这两件事时出现")
         }
     }
 }

@@ -48,8 +48,15 @@ final class AppModel: ObservableObject {
     @Published private(set) var helper: HelperStatus?
     @Published private(set) var helperBusy = false
     @Published private(set) var discharging = false
-    /// 窗口开着时 pmset 读得勤一点。
-    var windowVisible = false
+    /// 窗口真的看得见时为 true（没被盖住、没最小化）。看得见时每 2 秒读一次，动画也只在这时跑。
+    @Published var windowVisible = false {
+        didSet { if windowVisible != oldValue { pollingModeChanged() } }
+    }
+    /// 刘海灵动岛展开时也要实时。
+    var islandOpen = false {
+        didSet { if islandOpen != oldValue { pollingModeChanged() } }
+    }
+    @Published private(set) var forecast: [ForecastPoint] = []
 
     /// 菜单栏要跟着变。
     var onStatusChange: (() -> Void)?
@@ -71,6 +78,7 @@ final class AppModel: ObservableObject {
     private var lastProgress = -1.0
     private var syncingHelper = false
     private var lastSentLimit: Int?
+    private var lastHelperSend = Date.distantPast
 
     init(preview: Bool = false) {
         self.preview = preview
@@ -112,24 +120,46 @@ final class AppModel: ObservableObject {
     }
 
     var advice: [AdviceItem] {
-        Advice.items(battery: battery, memory: reading?.memory ?? MemorySnapshot(),
-                     limit: reading?.chargeLimit.isSupported == true ? decision.limit : nil,
-                     heatActive: heatActive)
+        Advice.top(Advice.items(battery: battery, memory: reading?.memory ?? MemorySnapshot(),
+                                limit: reading?.chargeLimit.isSupported == true || helperUsable ? decision.limit : nil,
+                                heatActive: heatActive, discharging: discharging))
     }
 
     var learnedRate: Double? { history.learnedRate() }
+
+    /// 帮手断开了电源适配器：系统会说没接电源，但其实线还插着。
+    var adapterCut: Bool { helper?.adapterEnabled == false }
+    var displayFlow: PowerFlow { discharging ? .discharging : battery.flow }
+    /// 画面里的动画只在窗口看得见、并且没开“减少动态效果”时才跑。
+    var liveMotion: Bool { windowVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    private var now: Date { reading?.date ?? Date() }
 
     // MARK: 生命周期
 
     func start() {
         guard !preview, timer == nil else { return }
         refresh()
-        timer = Task { [weak self] in
+        timer = makeTimer()
+    }
+
+    private var pollSeconds: Double { windowVisible || islandOpen ? 2 : 30 }
+
+    private func makeTimer() -> Task<Void, Never> {
+        Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(self?.pollSeconds ?? 30))
+                if Task.isCancelled { return }
                 self?.refresh()
             }
         }
+    }
+
+    /// 窗口出现或消失、灵动岛展开或收起：换一个读数的节奏，马上读一次。
+    private func pollingModeChanged() {
+        guard !preview, timer != nil else { return }
+        timer?.cancel()
+        timer = makeTimer()
+        if windowVisible || islandOpen { refresh() }
     }
 
     func refresh() {
@@ -179,6 +209,7 @@ final class AppModel: ObservableObject {
         let previousHeat = decision.reason == .heat
         recompute()
         updateDischarge()
+        recomputeForecast()
         if decision.reason == .heat && !previousHeat {
             notify("heat", "电池偏热，先停在 80%", "降到 37°C 以下再按时间表继续。")
         }
@@ -274,6 +305,9 @@ final class AppModel: ObservableObject {
         let wantedTarget = discharging ? decision.limit : nil
         let same = current.limit == wantedLimit && current.dischargeTo == wantedTarget
         if same && wantedTarget == nil { return }
+        // 放电指令 2 分钟有效，20 秒续一次就够，窗口开着每 2 秒读一次时不必每次都发。
+        if same, Date().timeIntervalSince(lastHelperSend) < 20 { return }
+        lastHelperSend = Date()
         syncingHelper = true
         lastSentLimit = wantedLimit
         Task {
@@ -330,13 +364,17 @@ final class AppModel: ObservableObject {
 
     // MARK: 预测
 
-    var forecast: [ForecastPoint] {
-        guard battery.present, let percent = battery.percent else { return [] }
-        return Forecast.points(
+    private func recomputeForecast() {
+        guard battery.present, let percent = battery.percent else {
+            if !forecast.isEmpty { forecast = [] }
+            return
+        }
+        forecast = Forecast.points(
             schedule: schedule, minute: minute, percent: percent,
-            external: battery.externalConnected || helper?.adapterEnabled == false,
+            external: battery.externalConnected || adapterCut,
             deadline: settings.deadlineEnabled ? settings.deadline : nil, chargeRate: learnedRate,
-            dischargeAvailable: helperUsable, topUpMinutes: topUpUntil.map { max(0, Int($0.timeIntervalSinceNow / 60)) },
+            dischargeAvailable: helperUsable,
+            topUpMinutes: topUpUntil.map { max(0, Int($0.timeIntervalSince(now) / 60)) },
             horizon: 480)
     }
 
@@ -367,6 +405,7 @@ final class AppModel: ObservableObject {
             }
         }
         recompute()
+        recomputeForecast()
         onStatusChange?()
         scheduleSave()
         if !preview && settings.intervals != old.intervals { autoApplyLimit() }
@@ -453,6 +492,7 @@ final class AppModel: ObservableObject {
             topUpUntil = Date().addingTimeInterval(Double(ahead) * 60)
         }
         recompute()
+        recomputeForecast()
         onStatusChange?()
         autoApplyLimit()
     }
@@ -475,13 +515,13 @@ final class AppModel: ObservableObject {
             let limit = decision.limit
             switch await Task.detached(operation: { ChargeBridge.read() }).value {
             case .current(let value) where value == limit:
-                notes.append("充电上限已是 \(limit)%")
+                notes.append("上限已是 \(limit)%")
             case .current:
                 if let error = await Task.detached(operation: { ChargeBridge.write(limit) }).value {
-                    notes.append("充电上限没写上：\(error)")
+                    notes.append("上限没写上：\(error)")
                     tone = .error
                 } else {
-                    notes.append("充电上限改为 \(limit)%")
+                    notes.append("上限改为 \(limit)%")
                 }
             case .unsupported(let text):
                 notes.append(text)
@@ -492,24 +532,24 @@ final class AppModel: ObservableObject {
 
             let current = await Task.detached(operation: { SystemReaders.lowPower() }).value
             if let current, current.matches(wanted) {
-                notes.append("低电量已是「\(wanted.title)」")
+                notes.append("低电量已是「\(wanted.shortTitle)」")
             } else {
                 let key = current?.key ?? "lowpowermode"
                 switch await Task.detached(operation: { LowPowerWriter.apply(wanted, key: key, hasBattery: hasBattery) }).value {
                 case .done:
-                    notes.append("低电量改为「\(wanted.title)」")
+                    notes.append("低电量改为「\(wanted.shortTitle)」")
                 case .cancelled:
-                    notes.append("密码框取消了，低电量没有改")
+                    notes.append("已取消，低电量没改")
                     if tone == .success { tone = .info }
                 case .failed(let text):
-                    notes.append("低电量没有改：\(text)")
+                    notes.append("低电量没改：\(text)")
                     tone = .error
                 }
             }
 
             syncLogin()
             if let note = loginNote { notes.append(note.trimmingCharacters(in: CharacterSet(charactersIn: "。"))) }
-            message = Message(tone: tone, text: notes.joined(separator: "。") + "。")
+            message = Message(tone: tone, text: notes.joined(separator: " · "))
             applying = false
             failedWrite = nil
             refresh()
@@ -712,10 +752,10 @@ final class AppModel: ObservableObject {
     var statusTitle: String {
         let battery = battery
         guard battery.present else { return "没有电池" }
-        if discharging { return "接着电源在放电" }
+        if discharging { return "放电中" }
         switch battery.flow {
-        case .charging: return "正在充电"
-        case .discharging: return battery.externalConnected ? "接着电源也在放电" : "用电池"
+        case .charging: return "充电中"
+        case .discharging: return battery.externalConnected ? "电源不够用" : "用电池"
         case .plugged:
             if let percent = battery.percent, percent >= decision.limit - 1 { return "停在上限" }
             return "电源接通"
@@ -726,15 +766,12 @@ final class AppModel: ObservableObject {
 
     var statusDetail: String {
         let battery = battery
-        if discharging { return "放到 \(decision.limit)% 就停，之后电源直接供电。" }
+        if discharging { return "放到 \(decision.limit)% 停，再由电源供电" }
         var parts: [String] = []
         if let minutes = battery.minutesToFull, battery.flow == .charging {
             parts.append("约 \(Self.duration(minutes)) 充满")
         } else if let minutes = battery.minutesToEmpty {
             parts.append("还能用约 \(Self.duration(minutes))")
-        }
-        if let watts = battery.watts, abs(watts) >= 0.5 {
-            parts.append(String(format: watts > 0 ? "充入 %.1f W" : "放出 %.1f W", abs(watts)))
         }
         if parts.isEmpty { return battery.flow.sentence }
         return parts.joined(separator: " · ")
@@ -744,14 +781,14 @@ final class AppModel: ObservableObject {
         var text = "上限 \(decision.limit)%"
         switch decision.reason {
         case .schedule, .gap:
-            if discharging { text += " · 正在放到 \(decision.limit)%" }
+            if discharging { text += " · 放电中" }
             if let change = schedule.nextChange(after: minute) {
                 text += " · \(change.at.text) 起 \(change.limit)%"
             }
         case .topUp:
             if let until = topUpUntil { text += " · 临时充满到 \(Self.clock(until))" }
         case .deadline:
-            text += " · 为 \(settings.deadline.text) 断电提前放开"
+            text += " · 断电前放开"
         case .heat:
             text += " · 过热保护"
         }
@@ -765,28 +802,23 @@ final class AppModel: ObservableObject {
         guard let plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
                                             deadline: deadline, rate: learnedRate, window: 1439) else { return nil }
         let title = "\(deadline.text) 断电"
-        let speed = plan.learned
-            ? String(format: "按这台机器学到的速度，每小时约 %.0f%%。", plan.rate * 60)
-            : "按默认速度估算，用得越久越准。"
         if percent >= plan.target {
-            return Tonight(title: title, detail: "已经 \(percent)%，断电时满电出门。", symbol: "checkmark.circle.fill", tone: .success)
+            return Tonight(title: title, detail: "已 \(percent)%，满电出门", symbol: "checkmark.circle.fill", tone: .success)
         }
         if deadlineLift != nil {
-            let eta = Date().addingTimeInterval(Double(plan.minutesNeeded) * 60)
-            return Tonight(title: title, detail: "已提前放开到 \(plan.target)%，预计 \(Self.clock(eta)) 充满。" + speed,
+            let eta = now.addingTimeInterval(Double(plan.minutesNeeded) * 60)
+            return Tonight(title: title, detail: "已放开，预计 \(Self.clock(eta)) 充满",
                            symbol: "bolt.badge.clock.fill", tone: .info)
         }
-        if !battery.externalConnected && plan.minutesToDeadline < 180 {
-            return Tonight(title: title, detail: "现在用电池。断电前接上电源，会充到 \(plan.target)%。",
-                           symbol: "powerplug", tone: .info)
+        if !battery.externalConnected && !adapterCut && plan.minutesToDeadline < 180 {
+            return Tonight(title: title, detail: "接上电源才能充满", symbol: "powerplug", tone: .info)
         }
-        let eta = Date().addingTimeInterval(Double(plan.etaMinutes) * 60)
+        let eta = now.addingTimeInterval(Double(plan.etaMinutes) * 60)
         if plan.reachesInTime {
-            return Tonight(title: title, detail: "预计 \(Self.clock(eta)) 到 \(plan.target)%，比断电早 \(Self.duration(plan.minutesToDeadline - plan.etaMinutes))。" + speed,
+            return Tonight(title: title, detail: "预计 \(Self.clock(eta)) 充满，早 \(Self.duration(plan.minutesToDeadline - plan.etaMinutes))",
                            symbol: "moon.stars.fill", tone: .info)
         }
-        return Tonight(title: title, detail: "按现在的速度来不及充到 \(plan.target)%。可以点「临时充满」先放开。" + speed,
-                       symbol: "exclamationmark.triangle.fill", tone: .error)
+        return Tonight(title: title, detail: "来不及充满，点「临时充满」", symbol: "exclamationmark.triangle.fill", tone: .error)
     }
 
     private func notify(_ id: String, _ title: String, _ body: String) {
@@ -802,5 +834,6 @@ final class AppModel: ObservableObject {
         self.history = history
         self.minute = minute
         recompute()
+        recomputeForecast()
     }
 }

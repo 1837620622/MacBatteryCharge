@@ -58,11 +58,11 @@ public enum PowerFlow: Equatable, Sendable {
 
     public var sentence: String {
         switch self {
-        case .noBattery: return "没有读到内置电池"
-        case .charging: return "正在往电池里充电"
+        case .noBattery: return "没有内置电池"
+        case .charging: return "正在充电"
         case .discharging: return "正在放电"
-        case .plugged: return "电源接通，电池不进不出"
-        case .battery: return "用电池供电"
+        case .plugged: return "电源直接供电"
+        case .battery: return "用电池"
         }
     }
 }

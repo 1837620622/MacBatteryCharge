@@ -1,5 +1,25 @@
 import Foundation
 
+/// 窗口的质感：纯色、磨砂（模糊桌面）、玻璃（系统支持时用 Liquid Glass，否则退回磨砂）。
+public enum WindowLook: String, Codable, CaseIterable, Sendable {
+    case solid
+    case frosted
+    case glass
+
+    public var title: String {
+        switch self {
+        case .solid: return "纯色"
+        case .frosted: return "磨砂"
+        case .glass: return "玻璃"
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let text = try decoder.singleValueContainer().decode(String.self)
+        self = WindowLook(rawValue: text) ?? .frosted
+    }
+}
+
 /// ~/Library/Application Support/MacBatteryCharge/settings.json，和 2.x 同一个文件，键名兼容。
 public struct AppSettings: Codable, Equatable, Sendable {
     public var intervals: [Interval]
@@ -18,6 +38,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var notchEars = false
     /// 没有刘海的屏幕上，在菜单栏正中假装有一个。
     public var notchWithoutNotch = false
+    /// 窗口质感和透明度。透明度是窗口底色透出多少桌面，0 不透，最多 0.7。
+    public var look = WindowLook.frosted
+    public var transparency = 0.25
+    public static let transparencyRange = 0.0...0.7
     public var lastUpdateCheck: Date?
     public var skippedVersion: String?
 
@@ -29,6 +53,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case intervals, launchAtLogin, guideSeen, autoCheckUpdates, deadlineEnabled, deadline
         case heatProtection, notifications, lastUpdateCheck, skippedVersion
         case notchIsland, notchOnPower, notchEars, notchWithoutNotch
+        case look, transparency
         case lowPowerAuto
     }
 
@@ -77,6 +102,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         notchOnPower = read(.notchOnPower, true)
         notchEars = read(.notchEars, false)
         notchWithoutNotch = read(.notchWithoutNotch, false)
+        look = read(.look, WindowLook.frosted)
+        let rawTransparency = read(.transparency, 0.25)
+        transparency = rawTransparency.isFinite ? min(max(rawTransparency, Self.transparencyRange.lowerBound), Self.transparencyRange.upperBound) : 0.25
         lastUpdateCheck = (try? c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)) ?? nil
         skippedVersion = (try? c.decodeIfPresent(String.self, forKey: .skippedVersion)) ?? nil
     }
@@ -95,6 +123,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try c.encode(notchOnPower, forKey: .notchOnPower)
         try c.encode(notchEars, forKey: .notchEars)
         try c.encode(notchWithoutNotch, forKey: .notchWithoutNotch)
+        try c.encode(look, forKey: .look)
+        try c.encode(transparency, forKey: .transparency)
         try c.encodeIfPresent(lastUpdateCheck, forKey: .lastUpdateCheck)
         try c.encodeIfPresent(skippedVersion, forKey: .skippedVersion)
     }

@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var observers: [NSObjectProtocol] = []
     private var island: NotchIsland?
     private var settingsSink: AnyCancellable?
+    private var lastIconKey = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let background = LaunchContext.isBackgroundLaunch()
@@ -83,9 +84,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         let battery = model.battery
-        button.image = MenuBarIcon.image(top: model.menuTop, bottom: model.menuBottom,
-                                         level: battery.percent.map { Double($0) / 100 },
-                                         charging: battery.flow == .charging)
+        // 两秒读一次时，图标没变就不重画。
+        let key = "\(model.menuTop)|\(model.menuBottom)|\(battery.percent ?? -1)|\(battery.flow == .charging)"
+        if key != lastIconKey {
+            lastIconKey = key
+            button.image = MenuBarIcon.image(top: model.menuTop, bottom: model.menuBottom,
+                                             level: battery.percent.map { Double($0) / 100 },
+                                             charging: battery.flow == .charging)
+        }
         let percent = battery.percent.map { "电量 \($0)%，" } ?? ""
         button.setAccessibilityLabel("充电上限 \(model.menuTop)，\(percent)\(model.menuBottom)")
         button.toolTip = "\(model.limitLine)\n\(model.statusTitle)"
@@ -114,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let apply = menu.addItem(withTitle: "立即应用", action: #selector(applyFromMenu), keyEquivalent: "")
         apply.target = self
         menu.addItem(.separator())
+        menu.addItem(withTitle: "关于充电上限", action: #selector(showAbout), keyEquivalent: "").target = self
         menu.addItem(withTitle: "退出充电上限", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
@@ -121,6 +128,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func openFromMenu() { showWindow() }
     @objc private func toggleTopUp() { model.toggleTopUp() }
     @objc private func applyFromMenu() { model.applyNow() }
+
+    /// 系统自带的“关于”面板，写上作者和项目地址。
+    @objc private func showAbout() {
+        if #available(macOS 14, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+        let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11)]
+        let credits = NSMutableAttributedString(string: "作者 \(AppInfo.author)\n", attributes: small)
+        var link = small
+        link[.link] = AppInfo.homepage
+        credits.append(NSAttributedString(string: AppInfo.homepage.absoluteString, attributes: link))
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: AppInfo.name,
+            .applicationVersion: Installation.version,
+            .version: "",
+            .credits: credits,
+            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): AppInfo.copyright,
+        ])
+    }
 
     // MARK: 窗口
 
@@ -149,6 +173,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                               backing: .buffered, defer: false)
         window.title = "充电上限"
         window.titlebarAppearsTransparent = true
+        // 底色由界面自己画：纯色就是不透明的窗口色，磨砂和玻璃是模糊的桌面。
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.isReleasedWhenClosed = false
         window.contentView = hosting
         window.minSize = NSSize(width: 400, height: 520)
@@ -175,8 +202,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setFrame(frame, display: false)
     }
 
+    func windowDidChangeOcclusionState(_ notification: Notification) { updateWindowVisibility() }
+    func windowDidMiniaturize(_ notification: Notification) { updateWindowVisibility() }
+    func windowDidDeminiaturize(_ notification: Notification) { updateWindowVisibility() }
+
+    /// 窗口真的看得见（没被盖住、没最小化）才算。看不见时不跑动画，也不用每 2 秒读数。
+    private func updateWindowVisibility(closing: Bool = false) {
+        guard let window, !closing else {
+            model.windowVisible = false
+            return
+        }
+        model.windowVisible = window.isVisible && !window.isMiniaturized && window.occlusionState.contains(.visible)
+    }
+
     func windowWillClose(_ notification: Notification) {
-        model.windowVisible = false
+        updateWindowVisibility(closing: true)
         model.saveNow()
         model.editingID = nil
     }

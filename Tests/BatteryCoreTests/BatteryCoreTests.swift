@@ -195,7 +195,7 @@ final class BatteryTests: XCTestCase {
 final class AdviceTests: XCTestCase {
     func testNoBattery() {
         let items = Advice.items(battery: BatterySnapshot(), memory: MemorySnapshot(), limit: 80, heatActive: false)
-        XCTAssertTrue(items.first?.text.contains("没有读到内置电池") == true, "台式机不要装成有电池")
+        XCTAssertTrue(items.first?.text.contains("没有内置电池") == true, "台式机不要装成有电池")
     }
 
     func testAboveLimitDoesNotDischarge() {
@@ -206,8 +206,11 @@ final class AdviceTests: XCTestCase {
         battery.milliamps = 0
         battery.temperatureRaw = 3000
         let text = Advice.items(battery: battery, memory: MemorySnapshot(), limit: 80, heatActive: false).map(\.text).joined()
-        XCTAssertTrue(text.contains("不会为了降到 80%"))
-        XCTAssertTrue(text.contains("常见范围"), "30°C 算常见温度")
+        XCTAssertTrue(text.contains("只停充"), "没放电时只停止充电")
+        XCTAssertTrue(text.contains("正常"), "30°C 算正常温度")
+        let live = Advice.items(battery: battery, memory: MemorySnapshot(), limit: 80, heatActive: false, discharging: true).map(\.text).joined()
+        XCTAssertTrue(live.contains("放电中"))
+        XCTAssertFalse(live.contains("只停充"))
     }
 
     func testWeakCharger() {
@@ -363,7 +366,8 @@ final class TextTests: XCTestCase {
         XCTAssertTrue(GuideCopy.titles.joined().contains("刘海"), "引导讲刘海")
         XCTAssertTrue(bodies.contains("管理员"), "引导讲管理员密码")
         XCTAssertTrue(bodies.contains("放电帮手"), "引导讲放电帮手")
-        XCTAssertTrue(bodies.contains("最低只到 20%"), "引导讲放电下限")
+        XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 40 }, "每步正文不超过 40 个字")
+        XCTAssertTrue(bodies.contains("最低 20%"), "引导讲放电下限")
         XCTAssertFalse(bodies.contains("完全磁盘"), "引导不索要磁盘权限")
         XCTAssertFalse(bodies.contains("辅助功能"), "引导不索要辅助功能")
         XCTAssertFalse(bodies.contains("屏幕录制"))

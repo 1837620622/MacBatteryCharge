@@ -114,6 +114,7 @@ final class NotchIsland {
         panel?.orderOut(nil)
         panel = nil
         state.expanded = false
+        model.islandOpen = false
     }
 
     private func makePanel() -> NSPanel {
@@ -215,6 +216,7 @@ final class NotchIsland {
     private func setExpanded(_ value: Bool) {
         guard state.expanded != value else { return }
         panel?.ignoresMouseEvents = !value
+        model.islandOpen = value
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             state.expanded = value
         } else {

@@ -17,37 +17,55 @@ enum Snapshot {
         }
 
         var ok = true
-        let folds = ["top", "bottom", "history", "schedule", "smart", "helper", "notch", "system"]
+        let folds = ["top", "bottom", "history", "schedule", "helper", "smart", "look", "system"]
         func setFolds(_ values: [String: Bool]) {
             for key in folds { UserDefaults.standard.set(values[key] ?? true, forKey: "fold.\(key)") }
         }
+        func file(_ name: String) -> URL { directory.appendingPathComponent(name) }
+
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let model = sampleModel()
+
+            // 三种质感，每种都先全展开。
+            for look in WindowLook.allCases {
+                model.settings.look = look
+                setFolds([:])
+                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
+                            to: file("main-\(look.rawValue)-\(name).png")) && ok
+            }
+            model.settings.look = .frosted
+
             setFolds([:])
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
-                        to: directory.appendingPathComponent("main-\(name).png")) && ok
-            ok = render(MainView(model: model).frame(width: 420, height: 2000), size: NSSize(width: 420, height: 2000),
-                        appearance: appearance, to: directory.appendingPathComponent("main-full-\(name).png")) && ok
-            // 第一层、第二层都收起
+            ok = render(MainView(model: model).environment(\.windowLook, .frosted).environment(\.isPreview, true)
+                .background(WindowBackdrop(look: .frosted, transparency: model.settings.transparency, preview: true))
+                .frame(width: 420, height: 2300), size: NSSize(width: 420, height: 2300), appearance: appearance,
+                        to: file("main-full-\(name).png")) && ok
+
+            // 第一层收起；只收第二层。
             setFolds(["top": false, "bottom": false])
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 560), appearance: appearance,
-                        to: directory.appendingPathComponent("main-folded-\(name).png")) && ok
-            // 只收第二层的卡片
-            setFolds(["history": false, "schedule": true, "smart": false, "helper": false, "notch": false, "system": false])
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 480), appearance: appearance,
+                        to: file("main-folded-\(name).png")) && ok
+            setFolds(["history": false, "schedule": true, "helper": false, "smart": false, "look": false, "system": false])
             ok = render(RootView(model: model), size: NSSize(width: 420, height: 900), appearance: appearance,
-                        to: directory.appendingPathComponent("main-cards-folded-\(name).png")) && ok
+                        to: file("main-cards-folded-\(name).png")) && ok
             setFolds([:])
+
+            // 设置里最长的两块，单独看。
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
+                        to: file("main-top-\(name).png")) && ok
+
             ok = render(islandPreview(model: model, expanded: true), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: directory.appendingPathComponent("island-expanded-\(name).png")) && ok
+                        to: file("island-expanded-\(name).png")) && ok
             ok = render(islandPreview(model: model, expanded: false), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: directory.appendingPathComponent("island-ears-\(name).png")) && ok
+                        to: file("island-ears-\(name).png")) && ok
             for step in GuideCopy.titles.indices {
                 let guide = GuideView(model: model, startStep: step, fixedPhase: 0.8)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(WindowBackdrop(look: .frosted, transparency: 0.25, preview: true))
+                    .environment(\.windowLook, .frosted)
                 ok = render(guide, size: NSSize(width: 420, height: 640), appearance: appearance,
-                            to: directory.appendingPathComponent("guide-\(step + 1)-\(name).png")) && ok
+                            to: file("guide-\(step + 1)-\(name).png")) && ok
             }
-            ok = writeMenuBar(dark: appearance == .darkAqua, to: directory.appendingPathComponent("menubar-\(name).png")) && ok
+            ok = writeMenuBar(dark: appearance == .darkAqua, to: file("menubar-\(name).png")) && ok
         }
         print(ok ? "截图在 \(directory.path)" : "有截图没画出来")
         return ok
