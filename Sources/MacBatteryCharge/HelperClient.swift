@@ -119,9 +119,14 @@ enum HelperInstaller {
     /// 卸载前先把电源接回来。这一步必须确认成功：
     /// 帮手如果被 SIGKILL，SMC 里「适配器断开」是持久状态，删掉帮手后就没人能把它接回去了，
     /// 用户会一直以为没插电（直到下次装帮手或重启）。宁可让用户重启后再卸，也不留下这个状态。
-    static func uninstall() -> Shell.AdminResult {
-        if let status = HelperClient.send(HelperRequest(cmd: .reset)), status.adapterEnabled == false {
+    static func uninstall(adapterMayBeCut: Bool) -> Shell.AdminResult {
+        let status = HelperClient.send(HelperRequest(cmd: .reset))
+        if status?.adapterEnabled == false {
             return .failed(T("帮手没有把电源接回来。请重启这台 Mac 之后再卸载。"))
+        }
+        // 帮手没有响应，但上次看到电源是断开的：现在是什么状态不知道，就不删。
+        if status == nil, adapterMayBeCut {
+            return .failed(T("帮手现在没有响应，而上次看到电源是断开的。请重启这台 Mac 之后再卸载。"))
         }
         return Shell.runAsAdmin(uninstallScript(), prompt: T("充电上限要卸载放电帮手，并把电源接回来。"))
     }

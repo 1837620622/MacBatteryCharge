@@ -174,6 +174,8 @@ final class AppModel: ObservableObject {
 
     /// 帮手断开了电源适配器：系统会说没接电源，但其实线还插着。
     var adapterCut: Bool { helper?.adapterEnabled == false }
+    /// 上次帮手说电源是断开的。帮手没响应时它不会自己变回来，所以卸载前要靠它判断。
+    var adapterMayBeCut = false
     var displayFlow: PowerFlow { discharging ? .discharging : battery.flow }
     /// 画面里的动画只在窗口看得见、并且没开“减少动态效果”时才跑。
     var liveMotion: Bool { windowVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
@@ -254,6 +256,8 @@ final class AppModel: ObservableObject {
         }
 
         helper = value.helper
+        // 帮手没响应时 value.helper 是 nil，这里保持上次的判断，不把“断开”的状态忘掉。
+        if let status = value.helper { adapterMayBeCut = status.adapterEnabled == false }
         let previousHeat = decision.reason == .heat
         recompute()
         updateDischarge()
@@ -460,11 +464,13 @@ final class AppModel: ObservableObject {
     func removeHelper() {
         guard !helperBusy, !preview else { return }
         helperBusy = true
+        let mayBeCut = adapterMayBeCut
         Task {
-            let result = await Task.detached { HelperInstaller.uninstall() }.value
+            let result = await Task.detached { HelperInstaller.uninstall(adapterMayBeCut: mayBeCut) }.value
             helperBusy = false
             discharging = false
             helper = nil
+            if result == .ok { adapterMayBeCut = false }
             switch result {
             case .ok:
                 message = Message(tone: .success, text: T("放电帮手已卸载，电源已接回。"))
@@ -752,7 +758,8 @@ final class AppModel: ObservableObject {
         }
         update = .downloading(release, 0)
         lastProgress = -1
-        let destination = UpdateCheck.cacheDirectory.appendingPathComponent(asset.name)
+        // 文件名只取最后一段，免得资产名里的 ../ 把安装包写到缓存目录外面。
+        let destination = UpdateCheck.cacheDirectory.appendingPathComponent((asset.name as NSString).lastPathComponent)
         let downloader = PackageDownloader(
             destination: destination,
             onProgress: { value in Task { @MainActor in self.downloadProgress(release, value) } },
@@ -773,13 +780,17 @@ final class AppModel: ObservableObject {
             update = .failed(T("下载没有完成：%@", ["\(error.localizedDescription)"]))
         case .success(let url):
             Task {
-                if let expected = asset.sha256 {
-                    let actual = await Task.detached(operation: { try? UpdateCheck.sha256(of: url) }).value
-                    guard actual == expected else {
-                        try? FileManager.default.removeItem(at: url)
-                        update = .failed(T("下载的安装包校验不对，已经删掉。请稍后再试。"))
-                        return
-                    }
+                // 没有校验码就不交给安装器：不能因为少了一个字段，就跳过完整性检查。
+                guard let expected = asset.sha256 else {
+                    try? FileManager.default.removeItem(at: url)
+                    update = .failed(T("这个版本没有附校验码，不能自动安装。请到 GitHub 手动下载。"))
+                    return
+                }
+                let actual = await Task.detached(operation: { try? UpdateCheck.sha256(of: url) }).value
+                guard actual == expected else {
+                    try? FileManager.default.removeItem(at: url)
+                    update = .failed(T("下载的安装包校验不对，已经删掉。请稍后再试。"))
+                    return
                 }
                 update = .installing(release)
                 NSWorkspace.shared.open(url)
@@ -834,9 +845,10 @@ final class AppModel: ObservableObject {
         timer?.cancel()
         timer = nil
         saveTask?.cancel()
+        let mayBeCut = adapterMayBeCut
         Task {
             if HelperInstaller.isInstalled {
-                switch await Task.detached(operation: { HelperInstaller.uninstall() }).value {
+                switch await Task.detached(operation: { HelperInstaller.uninstall(adapterMayBeCut: mayBeCut) }).value {
                 case .ok: break
                 case .cancelled:
                     message = Message(tone: .info, text: T("放电帮手要先卸掉才能卸载，密码框取消了。"))
