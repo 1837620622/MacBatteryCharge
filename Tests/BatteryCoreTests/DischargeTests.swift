@@ -110,7 +110,7 @@ final class DischargeTests: XCTestCase {
         XCTAssertFalse(HelperPolicy.decide(input(percent: 80, to: 80, resume: 75)).adapterOn, "到上限就开始断")
         XCTAssertTrue(HelperPolicy.decide(input(percent: 79, to: 80, resume: 75)).adapterOn, "没到上限不断")
         XCTAssertFalse(HelperPolicy.decide(input(percent: 79, to: 80, resume: 75, disabled: true)).adapterOn, "断着就一直断到 75")
-        XCTAssertFalse(HelperPolicy.decide(input(percent: 76, to: 80, resume: 75, external: false, disabled: true)).adapterOn)
+        XCTAssertFalse(HelperPolicy.decide(input(percent: 76, external: false, to: 80, resume: 75, disabled: true)).adapterOn)
         XCTAssertTrue(HelperPolicy.decide(input(percent: 75, to: 80, resume: 75, disabled: true)).adapterOn, "掉到 75 才接回")
     }
 
