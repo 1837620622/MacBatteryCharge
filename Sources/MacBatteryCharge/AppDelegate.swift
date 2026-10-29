@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .map { [$0.notchIsland, $0.notchOnPower, $0.notchEars, $0.notchWithoutNotch] }
             .removeDuplicates()
             .dropFirst()
-            .sink { [weak island] _ in DispatchQueue.main.async { island?.configure() } }
+            .sink { [weak island] _ in Task { @MainActor in island?.configure() } }
         model.start()
 
         LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
