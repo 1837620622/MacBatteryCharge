@@ -170,7 +170,7 @@ public enum SmartPolicy {
         case .topUp:
             return T("临时充满到 100%")
         case .deadline:
-            let at = value.deadline?.text ?? T("离电")
+            let at = value.deadline?.display ?? T("离电")
             return T("为 %@ 拔电源做准备，补到 %@%", ["\(at)", "\(value.decision.limit)"])
         default:
             if let plan = value.plan, plan.minutesNeeded == 0 {

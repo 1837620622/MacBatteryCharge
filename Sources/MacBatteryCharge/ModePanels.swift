@@ -54,7 +54,7 @@ struct SmartPanel: View {
 
     @ViewBuilder private var habitLine: some View {
         if let learned = model.learnedUnplug {
-            Text(T("已经学会：你平时大约 %@ 前后拔电源。", ["\(learned.text)"]))
+            Text(T("已经学会：你平时大约 %@ 前后拔电源。", ["\(learned.display)"]))
                 .font(.callout)
         } else if model.settings.learnHabits {
             Text(T("还在学：已记下 %@ 次。", ["\(model.learnedCount)"]))

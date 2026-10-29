@@ -247,6 +247,19 @@ final class AdviceTests: XCTestCase {
         XCTAssertFalse(guarded.contains("正常"), "保护中不再说正常")
     }
 
+    /// 英文界面用 12 小时制，中文和繁体用 24 小时制；存文件的 text 始终是 24 小时。
+    func testClockDisplayFollowsTheInterfaceLanguage() {
+        let saved = Lang.current
+        defer { Lang.current = saved }
+        Lang.current = .en
+        XCTAssertEqual(ClockTime(hour: 21, minute: 30).display, "9:30 PM")
+        XCTAssertEqual(ClockTime(hour: 0, minute: 5).display, "12:05 AM")
+        XCTAssertEqual(ClockTime(hour: 12, minute: 0).display, "12:00 PM")
+        XCTAssertEqual(ClockTime(hour: 21, minute: 30).text, "21:30", "存文件仍是 24 小时")
+        Lang.current = .zh
+        XCTAssertEqual(ClockTime(hour: 21, minute: 30).display, "21:30")
+    }
+
     func testWeakCharger() {
         var battery = BatterySnapshot()
         battery.present = true

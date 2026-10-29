@@ -270,7 +270,7 @@ final class AppModel: ObservableObject {
                                          deadline: settings.deadline, target: settings.unplugTarget,
                                          rate: learnedRate), plan.liftNow {
             deadlineLift = (plan.target, value.date.addingTimeInterval(Double(plan.minutesToDeadline) * 60))
-            notify("deadline", T("提前放开到 %@%", ["\(plan.target)"]), T("按这台机器的充电速度，赶在 %@ 断电前充满。", ["\(settings.deadline.text)"]))
+            notify("deadline", T("提前放开到 %@%", ["\(plan.target)"]), T("按这台机器的充电速度，赶在 %@ 断电前充满。", ["\(settings.deadline.display)"]))
         }
 
         helper = value.helper
@@ -891,7 +891,7 @@ final class AppModel: ObservableObject {
     }()
 
     static func clock(_ date: Date) -> String {
-        ClockTime(minuteOfDay: currentMinute(date)).text
+        ClockTime(minuteOfDay: currentMinute(date)).display
     }
 
     static func duration(_ minutes: Int) -> String {
@@ -943,7 +943,7 @@ final class AppModel: ObservableObject {
         case .schedule, .gap:
             if discharging { text += T(" · 放电中") }
             if let change = schedule.nextChange(after: minute) {
-                text += T(" · %@ 起 %@%", ["\(change.at.text)", "\(change.limit)"])
+                text += T(" · %@ 起 %@%", ["\(change.at.display)", "\(change.limit)"])
             }
         case .topUp:
             if let until = topUpUntil, until != Date.distantFuture {
@@ -983,7 +983,7 @@ final class AppModel: ObservableObject {
                                       rate: learnedRate, window: 1439)
         }
         guard let plan else { return nil }
-        let title = T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.text)", "\(plan.target)"])
+        let title = T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.display)", "\(plan.target)"])
         if percent >= plan.target {
             return Tonight(title: title, detail: T("现在 %@%，已经够了", ["\(percent)"]), symbol: "checkmark.circle.fill", tone: .success)
         }

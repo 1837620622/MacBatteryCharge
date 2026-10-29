@@ -13,6 +13,11 @@ struct RootView: View {
 
     @ObservedObject var model: AppModel
     @State private var page: Page
+    /// 页面、窗口和曲线卡片的高度，用来让曲线正好占满剩下的空间。
+    @State private var viewportHeight: CGFloat = 0
+    @State private var pageHeight: CGFloat = 0
+    @State private var chartCardHeight: CGFloat = 0
+    @State private var curveHeight: CGFloat = 96
 
     init(model: AppModel, page: Page = .main) {
         self.model = model
@@ -23,8 +28,11 @@ struct RootView: View {
         ZStack {
             WindowBackdrop(look: model.settings.look, transparency: model.settings.transparency)
             if model.showGuide {
-                ScrollView {
+                // 引导的内容短，上下居中，不留一大片空白。
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
                     GuideView(model: model)
+                    Spacer(minLength: 0)
                 }
             } else if page == .settings {
                 SettingsView(model: model) { switchPage(.main) }
@@ -70,9 +78,27 @@ struct RootView: View {
                 .padding(.horizontal, 18)
                 .padding(.bottom, 18)
                 .animation(.easeInOut(duration: 0.25), value: model.message)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: PageHeightKey.self, value: proxy.size.height)
+                })
             }
             .scrollIndicators(.hidden)
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: ViewportHeightKey.self, value: proxy.size.height)
+            })
         }
+        .onPreferenceChange(PageHeightKey.self) { pageHeight = $0; fitCurve() }
+        .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0; fitCurve() }
+        .onPreferenceChange(ChartCardHeightKey.self) { chartCardHeight = $0; fitCurve() }
+    }
+
+    /// 曲线占满窗口里剩下的高度，但不低于 96。内容比窗口还长时就是 96，底下照常滚动。
+    private func fitCurve() {
+        guard viewportHeight > 0, pageHeight > 0, chartCardHeight > 0 else { return }
+        let rest = pageHeight - chartCardHeight       // 曲线以外的高度，含底部内边距
+        let chrome = chartCardHeight - curveHeight    // 卡片的标题和说明，不随曲线变
+        let fit = max(96, viewportHeight - rest - chrome)
+        if abs(fit - curveHeight) > 0.5 { curveHeight = fit }
     }
 
     private var header: some View {
@@ -124,9 +150,10 @@ struct RootView: View {
     @ViewBuilder private var curve: some View {
         let samples = model.history.samples(since: Date().addingTimeInterval(-TimeInterval(ChargeCurve.pastMinutes * 60)))
         if !samples.isEmpty {
-            // 一直充满的页面内容最短，曲线画高到正好填满底下的空白。
-            ChargeCurve(samples: samples, forecast: model.forecast, now: Date(),
-                        height: model.settings.mode == .full ? 190 : 96)
+            ChargeCurve(samples: samples, forecast: model.forecast, now: Date(), height: curveHeight)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ChartCardHeightKey.self, value: proxy.size.height)
+                })
         }
     }
 
@@ -221,6 +248,22 @@ struct RootView: View {
         default: return .accentColor
         }
     }
+}
+
+/// 页面和窗口的高度，只用来算曲线该多高。
+private struct PageHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct ViewportHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct ChartCardHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// 一行提示：出错、写上限失败、时间表有问题都从这里说。
