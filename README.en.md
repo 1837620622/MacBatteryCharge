@@ -22,7 +22,6 @@ All three modes have heat protection: when the battery runs hot (above 35°C), t
 
 - The first long plugged-in session each day (at least 30 minutes) that ends in an unplug counts as one unplug. Moving the Mac around or a quick replug doesn't count.
 - After three of them it can tell you roughly when you usually unplug, and tops up before that time.
-- Charging speed is learned from your own Mac too. When the numbers aren't reliable yet, the window says so.
 - Everything stays on your Mac. Nothing is uploaded. You can learn again at any time, or turn learning off and use only your default unplug time.
 
 ## The interface

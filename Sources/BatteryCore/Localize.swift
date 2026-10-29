@@ -81,6 +81,8 @@ public func T(_ chinese: String, _ arguments: [String]) -> String {
 public enum Table {
     /// 英文。
     public static let english: [String: String] = [
+        " · 一直充满": " · Always full",
+        "自动检查新版本": "Check for new versions automatically",
         " · %@ 断电": " · unplug at %@",
         " · %@ 起 %@%": " · %@ from %@%",
         " · 临时充满到 %@": " · topping up to %@",
@@ -581,6 +583,8 @@ public enum Table {
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
     public static let traditional: [String: String] = [
+        " · 一直充满": " · 一直充滿",
+        "自动检查新版本": "自動檢查新版本",
         " · %@ 断电": " · %@ 斷電",
         " · %@ 起 %@%": " · %@ 起 %@%",
         " · 临时充满到 %@": " · 臨時充滿到 %@",

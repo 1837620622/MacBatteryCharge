@@ -73,6 +73,7 @@ struct SettingsView: View {
 
                 Section(T("关于")) {
                     LabeledContent(T("版本"), value: Installation.version)
+                    Toggle(T("自动检查新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
                     Button(T("反馈问题")) { NSWorkspace.shared.open(Self.issuesURL) }
                     Button(T("打开数据文件夹")) { model.openDataFolder() }
