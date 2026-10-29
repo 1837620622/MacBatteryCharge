@@ -5,42 +5,64 @@ import BatteryCore
 /// 主窗口：上面是现在的电量和正在做什么，中间是三种模式，下面是临时充满。
 /// 其它设置收进右上角的齿轮。
 struct RootView: View {
+    /// 弹窗里的页面：主页，或者设置。第一次的引导由 model.showGuide 决定，盖在最上面。
+    enum Page { case main, settings }
+
+    /// 菜单栏弹窗的大小。
+    static let popoverSize = NSSize(width: 400, height: 680)
+
     @ObservedObject var model: AppModel
-    @State private var showSettings = false
+    @State private var page: Page
+
+    init(model: AppModel, page: Page = .main) {
+        self.model = model
+        _page = State(initialValue: page)
+    }
 
     var body: some View {
         ZStack {
             WindowBackdrop(look: model.settings.look, transparency: model.settings.transparency)
-            VStack(spacing: 0) {
-                header
+            if model.showGuide {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        if let message = model.message {
-                            MessageLine(message: message) { model.dismissMessage() }
-                        }
-                        if let error = model.scheduleError {
-                            MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
-                        }
-                        Picker(T("模式"), selection: modeBinding) {
-                            ForEach(ChargeMode.allCases, id: \.self) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        modePanel
-                        footer
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
+                    GuideView(model: model)
                 }
+            } else if page == .settings {
+                SettingsView(model: model) { page = .main }
+            } else {
+                mainPage
             }
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView(model: model)
-        }
-        .sheet(isPresented: $model.showGuide) {
-            GuideView(model: model)
+    }
+
+    private var mainPage: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let message = model.message {
+                        MessageLine(message: message) { model.dismissMessage() }
+                    }
+                    if let error = model.scheduleError {
+                        MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
+                    }
+                    UpdateBanner(model: model)
+                    tonightCard
+                    Picker(T("模式"), selection: modeBinding) {
+                        ForEach(ChargeMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(model.settings.mode.tagline)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    modePanel
+                    footer
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
+            }
         }
     }
 
@@ -57,6 +79,8 @@ struct RootView: View {
                     .monospacedDigit()
                     .shadow(color: .black.opacity(0.25), radius: 2)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(diskLabel)
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.statusTitle)
                     .font(.title3.weight(.semibold))
@@ -71,7 +95,7 @@ struct RootView: View {
             }
             Spacer(minLength: 0)
             Button {
-                showSettings = true
+                page = .settings
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15, weight: .medium))
@@ -82,6 +106,38 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 14)
+    }
+
+    /// 今晚的计划放在最上面：这是人最想知道的一句话，不用在别处找。
+    @ViewBuilder private var tonightCard: some View {
+        if let tonight = model.tonight {
+            let tint = tonightTint(tonight.tone)
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: tonight.symbol)
+                    .font(.title2)
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tonight.title)
+                        .font(.headline)
+                    Text(tonight.detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.1)))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func tonightTint(_ tone: AppModel.Message.Tone) -> Color {
+        switch tone {
+        case .info: return .accentColor
+        case .success: return .green
+        case .error: return .orange
+        }
     }
 
     @ViewBuilder private var modePanel: some View {
@@ -95,6 +151,13 @@ struct RootView: View {
         }
     }
 
+    /// 临时充满旁边那句话：固定模式说「这一段」，智能说「拔掉电源」。
+    private var topUpHint: String {
+        let fixed = model.settings.mode == .fixed
+        if model.topUpActive { return fixed ? T("到下一段或拔掉电源时结束") : T("拔掉电源时结束") }
+        return fixed ? T("这一段先充到 100%，拔掉电源时结束") : T("先充到 100%，拔掉电源时结束")
+    }
+
     private var footer: some View {
         HStack(spacing: 10) {
             Button {
@@ -102,8 +165,8 @@ struct RootView: View {
             } label: {
                 Label(model.topUpActive ? T("结束临时充满") : T("临时充满"), systemImage: "bolt.fill")
             }
-            .disabled(!model.battery.present)
-            Text(model.topUpActive ? T("到下一段或拔掉电源时结束") : T("这一段先充到 100%，拔掉电源时结束"))
+            .disabled(!model.topUpAvailable)
+            Text(topUpHint)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -117,6 +180,11 @@ struct RootView: View {
 
     private var percentText: String {
         model.battery.percent.map { "\($0)%" } ?? "—"
+    }
+
+    /// 给 VoiceOver 读的一句：电量和现在的状态。
+    private var diskLabel: String {
+        model.battery.percent.map { T("电量 %@%，%@", ["\($0)", model.statusTitle]) } ?? model.statusTitle
     }
 
     private var ringColor: Color {
@@ -186,5 +254,14 @@ enum ClockPicker {
 
     static func binding(_ time: Binding<ClockTime>) -> Binding<Date> {
         Binding(get: { date(time.wrappedValue) }, set: { time.wrappedValue = clock($0) })
+    }
+
+    /// 时间选择器的语言跟着界面语言走，不跟着系统。系统是英文、界面是中文时，时间也不该显示成 AM/PM。
+    static var locale: Locale {
+        switch Lang.resolved {
+        case .zh: return Locale(identifier: "zh_CN")
+        case .zhHant: return Locale(identifier: "zh_TW")
+        case .en, .auto: return Locale(identifier: "en_US")
+        }
     }
 }

@@ -51,6 +51,8 @@ final class NotchIsland {
     /// 用户点开的就留着，直到再点一下。
     private var pinned = false
     private var active = false
+    /// 面板这会儿真的在某块屏幕上（有刘海，或者开了「没有刘海也用」）。不在屏幕上就不需要看鼠标。
+    private var onScreen = false
 
     init(model: AppModel) {
         self.model = model
@@ -64,7 +66,7 @@ final class NotchIsland {
         if wanted && !active { start() }
         if !wanted && active { stop() }
         if active {
-            watchMouse(settings.notchIsland)
+            syncMouseWatch()
             if !settings.notchIsland { collapse() }
             reposition()
         }
@@ -98,6 +100,7 @@ final class NotchIsland {
 
     private func stop() {
         active = false
+        onScreen = false
         collapseTask?.cancel()
         watchMouse(false)
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
@@ -107,6 +110,12 @@ final class NotchIsland {
         pinned = false
         state.expanded = false
         model.islandOpen = false
+    }
+
+    /// 鼠标监听只跟着「灵动岛开着，并且面板真的在屏幕上」走。没有刘海、也没开「没有刘海也用」，或者合着盖子时不装，
+    /// 免得系统每动一下鼠标都来叫醒我们一次，而面板其实看不见。
+    private func syncMouseWatch() {
+        watchMouse(active && onScreen && model.settings.notchIsland)
     }
 
     /// 只有灵动岛开着才看鼠标，只开两侧小字时不装。
@@ -162,13 +171,17 @@ final class NotchIsland {
         guard let panel else { return }
         guard let screen = targetScreen(), let geometry = NotchGeometry.of(screen, virtual: model.settings.notchWithoutNotch) else {
             panel.orderOut(nil)
+            onScreen = false
+            syncMouseWatch()
             return
         }
+        onScreen = true
         state.geometry = geometry
         let size = Self.panelSize
         panel.setFrame(NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height,
                               width: size.width, height: size.height), display: true)
         panel.orderFrontRegardless()
+        syncMouseWatch()
         updateMouseCapture()
     }
 
@@ -238,7 +251,7 @@ final class NotchIsland {
     }
 
     private func openWindow() {
-        (NSApp.delegate as? AppDelegate)?.showWindow()
+        (NSApp.delegate as? AppDelegate)?.showPopover()
     }
 }
 
@@ -308,6 +321,10 @@ struct IslandView: View {
                 .frame(width: width, height: geometry.height)
                 .contentShape(Rectangle())
                 .onTapGesture { onTap() }
+                .accessibilityElement()
+                .accessibilityLabel(T("刘海灵动岛"))
+                .accessibilityHint(T("点一下展开或收起"))
+                .accessibilityAddTraits(.isButton)
         }
         .frame(width: NotchIsland.panelSize.width, height: NotchIsland.panelSize.height, alignment: .top)
         .preferredColorScheme(.dark)
@@ -363,7 +380,7 @@ struct IslandView: View {
             }
             HStack(spacing: 8) {
                 islandButton(model.topUpActive ? T("结束临时充满") : T("临时充满"), symbol: "bolt.fill") { model.toggleTopUp() }
-                    .disabled(!battery.present)
+                    .disabled(!model.topUpAvailable)
                 islandButton(T("打开窗口"), symbol: "macwindow") { onOpen() }
                 Spacer(minLength: 0)
             }

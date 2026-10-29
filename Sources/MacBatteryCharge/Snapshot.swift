@@ -25,15 +25,28 @@ enum Snapshot {
             let tag = language == .zh ? "zh" : "en"
             for mode in ChargeMode.allCases {
                 let model = sampleModel(mode: mode, language: language)
-                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .aqua,
+                ok = render(RootView(model: model), size: RootView.popoverSize, appearance: .aqua,
                             to: file("main-\(mode.rawValue)-\(tag).png")) && ok
             }
             let model = sampleModel(mode: .smart, language: language)
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .darkAqua,
+            ok = render(RootView(model: model), size: RootView.popoverSize, appearance: .darkAqua,
                         to: file("main-smart-dark-\(tag).png")) && ok
-            ok = render(SettingsView(model: model), size: NSSize(width: 460, height: 640), appearance: .aqua,
+            if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v3.1.1","assets":[]}"#.utf8)) {
+                let ready = sampleModel(mode: .smart, language: language)
+                ready.loadPreviewUpdate(.ready(release, URL(fileURLWithPath: "/tmp/MacBatteryCharge-3.1.1-arm64.pkg")))
+                ok = render(RootView(model: ready), size: RootView.popoverSize, appearance: .aqua,
+                            to: file("main-update-ready-\(tag).png")) && ok
+                let failed = sampleModel(mode: .smart, language: language)
+                failed.loadPreviewUpdate(.failed(T("下载没有成功，请检查网络。"), release))
+                ok = render(RootView(model: failed), size: RootView.popoverSize, appearance: .aqua,
+                            to: file("main-update-failed-\(tag).png")) && ok
+            }
+            let settingsPage = sampleModel(mode: .smart, language: language)
+            ok = render(RootView(model: settingsPage, page: .settings), size: RootView.popoverSize, appearance: .aqua,
                         to: file("settings-\(tag).png")) && ok
-            ok = render(GuideView(model: model), size: NSSize(width: 460, height: 430), appearance: .aqua,
+            let guidePage = sampleModel(mode: .smart, language: language)
+            guidePage.showGuide = true
+            ok = render(RootView(model: guidePage), size: RootView.popoverSize, appearance: .aqua,
                         to: file("guide-\(tag).png")) && ok
             ok = render(islandPreview(model: model, expanded: true), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
                         to: file("island-expanded-\(tag).png")) && ok
@@ -161,7 +174,7 @@ enum Snapshot {
     /// 菜单栏图标：上面一行是上限，下面一行是状态。
     @MainActor
     static func writeMenuBar(to url: URL) -> Bool {
-        let image = MenuBarIcon.image(top: "80%", bottom: T("充电"), level: 0.8, charging: true)
+        let image = MenuBarIcon.image(percent: 80, charging: true)
         guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
               let data = rep.representation(using: .png, properties: [:]) else { return false }
         return write(data, to: url)

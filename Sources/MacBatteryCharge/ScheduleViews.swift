@@ -14,7 +14,7 @@ struct ScheduleEditor: View {
                 Button(T("恢复默认")) { model.resetSchedule() }
                     .controlSize(.small)
             }
-            Text(T("每一段停在这里的上限。没排到的时间按 100% 充。"))
+            Text(T("每一段时间里，电池停在你选的数字。没排到的时间充到 100%。"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
             ForEach($model.settings.intervals) { binding in
@@ -47,37 +47,42 @@ struct IntervalRow: View {
     var remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            DatePicker("", selection: ClockPicker.binding($item.start), displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .fixedSize()
-            Text("–")
-                .foregroundStyle(.secondary)
-            DatePicker("", selection: ClockPicker.binding($item.end), displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .fixedSize()
-            Picker("", selection: $item.limit) {
-                ForEach(Schedule.allowedLimits, id: \.self) { value in
-                    Text("\(value)%").tag(value)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                DatePicker("", selection: ClockPicker.binding($item.start), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .fixedSize()
+                    .environment(\.locale, ClockPicker.locale)
+                Text("–")
+                    .foregroundStyle(.secondary)
+                DatePicker("", selection: ClockPicker.binding($item.end), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .fixedSize()
+                    .environment(\.locale, ClockPicker.locale)
+                Picker("", selection: $item.limit) {
+                    ForEach(Schedule.allowedLimits, id: \.self) { value in
+                        Text("\(value)%").tag(value)
+                    }
                 }
+                .labelsHidden()
+                .fixedSize()
+                Spacer(minLength: 0)
+                Button(action: remove) {
+                    Image(systemName: "minus.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(T("删掉这一段"))
             }
-            .labelsHidden()
-            .fixedSize()
-            Spacer(minLength: 0)
+            // 放电单独一行：英文的标签长，和时间、上限挤在一行里会断成一个字一行。
             if dischargeAvailable {
                 Toggle(T("放电"), isOn: $item.discharge)
                     .toggleStyle(.checkbox)
                     .controlSize(.small)
                     .help(T("接着电源、电量高于上限时，用电池放到上限再停住。"))
             }
-            Button(action: remove) {
-                Image(systemName: "minus.circle")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help(T("删掉这一段"))
         }
         .padding(.vertical, 2)
     }

@@ -41,7 +41,7 @@ enum Benchmark {
                                 deadline: ClockTime(hour: 23, minute: 30), chargeRate: 0.33, dischargeAvailable: true, horizon: 480)
         }
         measure("画菜单栏图标", runs: 200, limit: 3) {
-            _ = MenuBarIcon.image(top: "80%", bottom: "接通", level: 0.8, charging: true)
+            _ = MenuBarIcon.image(percent: 80, charging: true)
         }
 
         var history = ChargeHistory()

@@ -19,18 +19,18 @@ public enum ChargeMode: String, Codable, CaseIterable, Sendable {
 
     public var tagline: String {
         switch self {
-        case .smart: return T("护电池优先，离电前自动备电")
-        case .fixed: return T("按你排的时间段来")
-        case .full: return T("一直充到 100%")
+        case .smart: return T("平时护电池，拔电源前自动补满")
+        case .fixed: return T("按你排的时间段来，每段停在哪里你说了算")
+        case .full: return T("接上电源就充满，适合台式机")
         }
     }
 
     public var detail: String {
         switch self {
         case .smart:
-            return T("平时停在日常上限（默认 80%），不会一直满电。按你平时拔电源的时间，提前把电备到离电目标。不主动放电。")
+            return T("平时停在你选的数字（默认 80%），不一直满电。拔电源前按你平时的时间补到你要的量。不主动放电。")
         case .fixed:
-            return T("每一段自己设上限、低电量、放电和漂移。想完全自己控制就选这个。")
+            return T("每一段自己设上限，也能选放电。想完全自己控制就选这个。")
         case .full:
             return T("上限一直是 100%，接上电源就充满。护电池的好处最少，但拔了电源就是满的。")
         }
@@ -162,12 +162,12 @@ public enum SmartPolicy {
             return T("临时充满到 100%")
         case .deadline:
             let at = value.deadline?.text ?? T("离电")
-            return T("为 %@ 离电备电，放开到 %@%", ["\(at)", "\(value.decision.limit)"])
+            return T("为 %@ 拔电源做准备，补到 %@%", ["\(at)", "\(value.decision.limit)"])
         default:
             if let plan = value.plan, plan.minutesNeeded == 0 {
-                return T("已经到离电目标 %@%，停在 %@% 不动", ["\(target)", "\(value.cap)"])
+                return T("已经补到 %@%，停在 %@% 不动", ["\(target)", "\(value.cap)"])
             }
-            return T("平时停在 %@%，离电前再往上备", ["\(value.cap)"])
+            return T("平时停在 %@%，拔电源前会补满", ["\(value.cap)"])
         }
     }
 }

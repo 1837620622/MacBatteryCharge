@@ -76,6 +76,7 @@ final class AppModel: ObservableObject {
 
     private var lastValidIntervals: [Interval]
     private var timer: Task<Void, Never>?
+    private var updateTimer: Task<Void, Never>?
     private var refreshing = false
     private var refreshStartedAt: Date?
     private var writingSince = Date.distantPast
@@ -183,6 +184,18 @@ final class AppModel: ObservableObject {
         guard !preview, timer == nil else { return }
         refresh()
         timer = makeTimer()
+        updateTimer = makeUpdateTimer()
+    }
+
+    /// 后台每小时看一眼。真正去查的间隔由 maybeCheckForUpdates 管，两次之间至少隔 20 小时。
+    private func makeUpdateTimer() -> Task<Void, Never> {
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+                if Task.isCancelled { return }
+                self?.maybeCheckForUpdates()
+            }
+        }
     }
 
     private var pollSeconds: Double { windowVisible || islandOpen ? 2 : 30 }
@@ -520,6 +533,8 @@ final class AppModel: ObservableObject {
         }
         if settings.deadlineEnabled != old.deadlineEnabled || settings.deadline != old.deadline
             || settings.unplugTarget != old.unplugTarget || settings.mode != old.mode { deadlineLift = nil }
+        // 临时充满的结束时间是按模式定的，换了模式就重新来。
+        if settings.mode != old.mode { topUpUntil = nil }
         if settings.language != old.language {
             Lang.current = settings.language
             // 菜单栏、窗口标题这些不在 SwiftUI 里的字要自己重画一遍。
@@ -616,12 +631,20 @@ final class AppModel: ObservableObject {
 
     var topUpActive: Bool { topUpUntil != nil }
 
+    /// 一直充满本来就是 100%，不需要临时充满。
+    var topUpAvailable: Bool { battery.present && settings.mode != .full }
+
     func toggleTopUp() {
+        guard topUpAvailable || topUpUntil != nil else { return }
         if topUpUntil != nil {
             topUpUntil = nil
-        } else {
+        } else if settings.mode == .fixed {
+            // 固定模式：充到这一段结束，也就是下一段开始或拔掉电源。
             let ahead = schedule.minutesUntilBoundary(from: minute) ?? 1440
             topUpUntil = Date().addingTimeInterval(Double(ahead) * 60)
+        } else {
+            // 智能没有时间段可以停，所以一直到拔掉电源为止。
+            topUpUntil = Date.distantFuture
         }
         recompute()
         recomputeForecast(force: true)
@@ -664,7 +687,8 @@ final class AppModel: ObservableObject {
 
     // MARK: 检查更新
 
-    /// 启动后每 20 小时查一次。查到新版本只提示，去发布页下载，不在软件里自己装。
+    /// 窗口打开、引导看完后查一次；之后每 20 小时在后台查一次。查到新版本就在后台下好安装包，
+    /// 窗口里提示你；真正装上要点「立即安装」，并输入一次管理员密码。
     func maybeCheckForUpdates() {
         guard !preview, settings.guideSeen, settings.autoCheckUpdates else { return }
         if let last = settings.lastUpdateCheck, Date().timeIntervalSince(last) < 20 * 3600 { return }
@@ -673,18 +697,24 @@ final class AppModel: ObservableObject {
 
     func checkForUpdates(userInitiated: Bool) {
         guard !preview else { return }
-        if userInitiated { update = .checking }
+        if userInitiated, !updateBusy { update = .checking }
         Task {
             do {
                 let release = try await UpdateCheck.fetchLatest()
                 settings.lastUpdateCheck = Date()
                 if AppVersion.isNewer(release.version, than: Installation.version) {
-                    update = (!userInitiated && settings.skippedVersion == release.version) ? .idle : .available(release)
-                } else {
+                    if userInitiated || settings.skippedVersion != release.version {
+                        offerUpdate(release)
+                    } else if !updateBusy {
+                        update = .idle
+                    }
+                } else if !updateBusy {
                     update = userInitiated ? .upToDate : .idle
                 }
             } catch {
-                update = userInitiated ? .failed(T("查不到新版本：%@", ["\(error.localizedDescription)"])) : .idle
+                if !updateBusy {
+                    update = userInitiated ? .failed(T("查不到新版本：%@", ["\(error.localizedDescription)"]), nil) : .idle
+                }
             }
         }
     }
@@ -694,8 +724,70 @@ final class AppModel: ObservableObject {
         update = .idle
     }
 
+    /// 去发布页手动下。页面地址缺了，就去最新版的发布页。
     func openDownloadPage(_ release: ReleaseInfo) {
-        if let page = release.page { NSWorkspace.shared.open(page) }
+        NSWorkspace.shared.open(release.page ?? UpdateCheck.releasesPage)
+    }
+
+    /// 查到一个要装的新版本：已经在下、已经下好或正在装同一版，就不重来；否则马上在后台下。
+    private func offerUpdate(_ release: ReleaseInfo) {
+        switch update {
+        case .downloading(let current), .ready(let current, _), .installing(let current):
+            if current.version == release.version { return }
+        default:
+            break
+        }
+        downloadUpdate(release)
+    }
+
+    /// 在后台下安装包，核对过才算下好。只认这一版：中途换了版本，旧的结果就不再写进界面。
+    func downloadUpdate(_ release: ReleaseInfo) {
+        guard let asset = release.package(arm64: AppUpdater.isArm64) else {
+            update = .failed(T("这个版本没有适合这台 Mac 的安装包。"), release)
+            return
+        }
+        update = .downloading(release)
+        Task {
+            do {
+                let file = try await AppUpdater.download(asset)
+                if case .downloading(let current) = update, current.version == release.version {
+                    update = .ready(release, file)
+                }
+            } catch {
+                if case .downloading(let current) = update, current.version == release.version {
+                    update = .failed(error.localizedDescription, release)
+                }
+            }
+        }
+    }
+
+    /// 装上下好的安装包：弹一次管理员密码框，装完核对版本号，然后退出并打开新版本。
+    func installUpdate() {
+        guard case .ready(let release, let file) = update else { return }
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            downloadUpdate(release)
+            return
+        }
+        update = .installing(release)
+        Task {
+            let outcome = await Task.detached { AppUpdater.install(file, version: release.version) }.value
+            switch outcome {
+            case .installed:
+                Installation.relaunch(Installation.applicationsURL)
+            case .cancelled:
+                update = .ready(release, file)
+            case .failed(let text):
+                update = .failed(text, release)
+            }
+        }
+    }
+
+    /// 正在下、已经下好或正在装：这时候的检查不能把界面换掉。
+    private var updateBusy: Bool {
+        switch update {
+        case .downloading, .ready, .installing: return true
+        default: return false
+        }
     }
 
     func dismissMessage() { message = nil }
@@ -721,8 +813,6 @@ final class AppModel: ObservableObject {
 
     // MARK: 更新
 
-    /// 只在窗口打开、引导看完后才查。登录时后台启动不查，也不弹窗。
-    /// 安装器装完后，“应用程序”里的版本号会变；那时退出并打开新版本。
     // MARK: 安装位置和卸载
 
     func moveToApplications() {
@@ -804,7 +894,7 @@ final class AppModel: ObservableObject {
         case .charging: return T("充电中")
         case .discharging: return battery.externalConnected ? T("电源不够用") : T("用电池")
         case .plugged:
-            if let percent = battery.percent, percent >= decision.limit - 1 { return T("停在上限") }
+            if let percent = battery.percent, percent >= decision.limit - 1 { return T("已停住") }
             return T("电源接通")
         case .battery: return T("用电池")
         case .noBattery: return T("没有电池")
@@ -825,7 +915,7 @@ final class AppModel: ObservableObject {
     }
 
     var limitLine: String {
-        var text = T("上限 %@%", ["\(decision.limit)"])
+        var text = T("停在 %@%", ["\(decision.limit)"])
         switch decision.reason {
         case .schedule, .gap:
             if discharging { text += T(" · 放电中") }
@@ -833,13 +923,17 @@ final class AppModel: ObservableObject {
                 text += T(" · %@ 起 %@%", ["\(change.at.text)", "\(change.limit)"])
             }
         case .topUp:
-            if let until = topUpUntil { text += T(" · 临时充满到 %@", ["\(Self.clock(until))"]) }
+            if let until = topUpUntil, until != Date.distantFuture {
+                text += T(" · 临时充满到 %@", ["\(Self.clock(until))"])
+            } else {
+                text += T(" · 临时充满，拔掉电源时结束")
+            }
         case .deadline:
-            text += T(" · 离电前放开")
+            text += T(" · 提前开始补")
         case .heat:
             text += T(" · 过热保护")
         case .smart:
-            text += T(" · 智能：平时 %@%", ["\(decision.scheduled)"])
+            break
         case .full:
             text += T(" · 一直充满")
         }
@@ -848,41 +942,48 @@ final class AppModel: ObservableObject {
 
     var tonight: Tonight? {
         let battery = battery
-        guard battery.present, settings.deadlineEnabled, let percent = battery.percent else { return nil }
-        // 智能模式有学到的拔电时间就按它算，否则用用户设的。
-        let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? settings.deadline
+        // 智能模式有学到的拔电时间就按它算；没学会时，只有开着「还没学会时，先按一个固定时间」才用用户设的时间。
+        let fallback = settings.deadlineEnabled ? settings.deadline : nil
+        guard battery.present, let percent = battery.percent,
+              let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? fallback else { return nil }
         let plan: ChargePlan?
-        if settings.mode == .smart {
+        switch settings.mode {
+        case .smart:
             plan = ChargePlanner.plan(minute: minute, percent: percent, deadline: deadline,
                                       target: settings.unplugTarget, base: settings.smartDailyCap,
                                       rate: learnedRate, window: 1439)
-        } else {
+        case .fixed:
             plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
                                       deadline: deadline, target: settings.unplugTarget,
                                       rate: learnedRate, window: 1439)
+        case .full:
+            // 一直充满不看时间表，按现在就充来算。base 是 100，所以不会有放开时间。
+            plan = ChargePlanner.plan(minute: minute, percent: percent, deadline: deadline,
+                                      target: settings.unplugTarget, base: 100,
+                                      rate: learnedRate, window: 1439)
         }
         guard let plan else { return nil }
-        let title = T("%@ 离电 · 目标 %@%", ["\(deadline.text)", "\(plan.target)"])
+        let title = T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.text)", "\(plan.target)"])
         if percent >= plan.target {
-            return Tonight(title: title, detail: T("已 %@%，到 %@% 了", ["\(percent)", "\(plan.target)"]), symbol: "checkmark.circle.fill", tone: .success)
+            return Tonight(title: title, detail: T("现在 %@%，已经够了", ["\(percent)"]), symbol: "checkmark.circle.fill", tone: .success)
         }
         // 没接电源就没有确定的时间可给：只能说到时候要充多久，不能说几点能满。
         if !battery.externalConnected && !adapterCut {
             return Tonight(title: title,
-                           detail: T("插上电源后约 %@ 充满", ["\(Self.duration(plan.minutesNeeded))"]),
+                           detail: T("插上电源，约 %@ 就能充满", ["\(Self.duration(plan.minutesNeeded))"]),
                            symbol: "powerplug", tone: .info)
         }
         if deadlineLift != nil {
             let eta = now.addingTimeInterval(Double(plan.minutesNeeded) * 60)
-            return Tonight(title: title, detail: T("已放开，预计 %@ 充满", ["\(Self.clock(eta))"]),
+            return Tonight(title: title, detail: T("已经开始补，预计 %@ 充满", ["\(Self.clock(eta))"]),
                            symbol: "bolt.badge.clock.fill", tone: .info)
         }
         let eta = now.addingTimeInterval(Double(plan.etaMinutes) * 60)
         if plan.reachesInTime {
-            return Tonight(title: title, detail: T("预计 %@ 充满，早 %@", ["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
+            return Tonight(title: title, detail: T("约 %@ 充满，比拔电源早 %@",["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
                            symbol: "moon.stars.fill", tone: .info)
         }
-        return Tonight(title: title, detail: T("来不及充到 %@%，点「临时充满」", ["\(plan.target)"]), symbol: "exclamationmark.triangle.fill", tone: .error)
+        return Tonight(title: title, detail: T("来不及充到 %@%，可以点「临时充满」", ["\(plan.target)"]), symbol: "exclamationmark.triangle.fill", tone: .error)
     }
 
     private func notify(_ id: String, _ title: String, _ body: String) {
@@ -891,6 +992,11 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: 截图用
+
+    /// 截图用：直接放一个更新状态上去，不查网络。
+    func loadPreviewUpdate(_ state: UpdateState) {
+        update = state
+    }
 
     func loadPreview(_ value: SystemReading, history: ChargeHistory, minute: Int) {
         reading = value
@@ -904,8 +1010,8 @@ final class AppModel: ObservableObject {
             var record = DayRecord(day: Self.dayKey(date))
             record.lo = 42 + day % 5
             record.hi = day % 3 == 0 ? 100 : 80
-            record.batteryMinutes = 200 + day * 7
-            record.powerMinutes = 900 - day * 5
+            record.batteryMinutes = Double(200 + day * 7)
+            record.powerMinutes = Double(900 - day * 5)
             record.fullMinutes = day % 3 == 0 ? 520 : 40
             record.unplug = 18 * 60 + 40 + day % 12
             record.plug = 9 * 60 + 5

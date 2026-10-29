@@ -5,7 +5,8 @@ import BatteryCore
 /// 设置：语言、登录、通知、外观、刘海、高级和关于。平时用不到的都收在这里。
 struct SettingsView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    /// 点「完成」：弹窗里换回主页。
+    var onClose: () -> Void
 
     private static let issuesURL = URL(string: "https://github.com/1837620622/MacFullBar/issues")!
 
@@ -15,7 +16,7 @@ struct SettingsView: View {
                 Text(T("设置"))
                     .font(.title3.weight(.semibold))
                 Spacer(minLength: 0)
-                Button(T("完成")) { dismiss() }
+                Button(T("完成")) { onClose() }
                     .keyboardShortcut(.defaultAction)
             }
             .padding(16)
@@ -73,7 +74,7 @@ struct SettingsView: View {
 
                 Section(T("关于")) {
                     LabeledContent(T("版本"), value: Installation.version)
-                    Toggle(T("自动检查新版本"), isOn: $model.settings.autoCheckUpdates)
+                    Toggle(T("自动检查，并在后台下好新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
                     Button(T("反馈问题")) { NSWorkspace.shared.open(Self.issuesURL) }
                     Button(T("打开数据文件夹")) { model.openDataFolder() }
@@ -85,7 +86,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 460, height: 640)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder private var helperRow: some View {
@@ -124,16 +125,29 @@ struct SettingsView: View {
             Text(T("已经是最新版。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .failed(let text):
-            Text(text)
+        case .downloading(let release):
+            Text(T("正在下载新版本 %@", ["\(release.version)"]))
                 .font(.caption)
-                .foregroundStyle(.orange)
-        case .available(let release):
+                .foregroundStyle(.secondary)
+        case .ready(let release, _):
             VStack(alignment: .leading, spacing: 6) {
-                Text(T("有新版本 %@", ["\(release.version)"]))
-                HStack(spacing: 10) {
-                    Button(T("去下载")) { model.openDownloadPage(release) }
-                    Button(T("跳过这个版本")) { model.skip(release) }
+                Text(T("新版本 %@ 已经下好，到窗口里点「立即安装」。", ["\(release.version)"]))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(T("去下载页面")) { model.openDownloadPage(release) }
+                    .controlSize(.small)
+            }
+        case .installing(let release):
+            Text(T("正在安装 %@", ["\(release.version)"]))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed(let text, let release):
+            VStack(alignment: .leading, spacing: 6) {
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                if let release {
+                    Button(T("去下载页面")) { model.openDownloadPage(release) }
                         .controlSize(.small)
                 }
             }
