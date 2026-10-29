@@ -59,7 +59,7 @@ final class DischargeTests: XCTestCase {
     }
 
     func testHeatThresholdsFollowApplePublishedRange() {
-        XCTAssertEqual(ChargePolicy.heatOn, 35, "苹果给的工作温度上限是 35°C")
+        XCTAssertEqual(ChargePolicy.heatOn, 35, "35°C 是我们选的保守阈值，不是苹果规定的电池温度")
         XCTAssertTrue(ChargePolicy.heatActive(previous: false, celsius: 35.5, external: true))
         XCTAssertTrue(ChargePolicy.heatActive(previous: true, celsius: 34, external: true), "中间保持")
         XCTAssertFalse(ChargePolicy.heatActive(previous: false, celsius: 34, external: true))

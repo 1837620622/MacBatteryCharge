@@ -373,12 +373,8 @@ struct ReadingsCard: View {
 
     private var items: [Item] {
         let battery = model.battery
-        let memory = model.reading?.memory
-        let memoryItem = Item(symbol: "memorychip", title: "内存", value: memory.map { MemorySnapshot.bytesText($0.usedBytes) } ?? "—",
-                              note: memory.map { "共 \(MemorySnapshot.bytesText($0.totalBytes)) · \($0.pressureText)" },
-                              tint: (memory?.pressure ?? 0) >= 4 ? .orange : .secondary)
         guard battery.present else {
-            return [memoryItem, Item(symbol: "gauge.with.dots.needle.67percent", title: "系统上限", value: limitValue, note: limitNote)]
+            return [Item(symbol: "gauge.with.dots.needle.67percent", title: "系统上限", value: limitValue, note: limitNote)]
         }
         return [
             Item(symbol: "bolt", title: "功率", value: powerValue(battery), note: currentNote(battery),
@@ -387,7 +383,6 @@ struct ReadingsCard: View {
                  note: thermalText, tint: (battery.celsius ?? 0) >= 40 ? .orange : .secondary),
             Item(symbol: "heart", title: "健康", value: battery.health.map { "\($0)%" } ?? "—", note: cycleNote(battery),
                  tint: (battery.health ?? 100) < 80 ? .orange : .secondary),
-            memoryItem,
             Item(symbol: "powerplug", title: "电源", value: adapterValue(battery), note: model.adapterCut ? "已断开" : nil),
             Item(symbol: "leaf", title: "低电量", value: model.reading?.lowPower?.text ?? "—",
                  note: model.lowPowerMismatch ? "这一段要「\(model.wantedLowPower.shortTitle)」" : nil,

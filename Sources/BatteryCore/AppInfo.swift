@@ -11,4 +11,6 @@ public enum AppInfo {
     public static var homepage: URL { URL(string: "https://github.com/\(repository)")! }
     public static var authorPage: URL { URL(string: "https://github.com/\(githubUser)")! }
     public static var releasesPage: URL { URL(string: "https://github.com/\(repository)/releases")! }
+    /// README 里的「赞助」一节。锚点写成百分号编码，免得中文让 URL 解析失败。
+    public static var sponsorPage: URL { URL(string: "https://github.com/\(repository)#%E8%B5%9E%E5%8A%A9")! }
 }
