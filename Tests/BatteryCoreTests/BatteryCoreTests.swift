@@ -324,6 +324,15 @@ final class PlannerTests: XCTestCase {
         XCTAssertEqual(full?.etaMinutes, 0)
     }
 
+    /// 一直充满模式不看时间表：离电计划按「现在就充」算。要是借用固定时间表的放开时间，
+    /// 10:00 开始充的电会被算成 23:15 才满。
+    func testFullModeDoesNotBorrowScheduleLift() {
+        let plan = ChargePlanner.plan(minute: at(10, 0), percent: 50, deadline: ClockTime(hour: 23, minute: 30),
+                                      target: 100, base: 100, rate: nil, window: 1439)
+        XCTAssertEqual(plan?.liftNow, false)
+        XCTAssertEqual(plan?.etaMinutes, 152, "50% 到 100%，默认 0.33%/分钟要 152 分钟")
+    }
+
     func testLearnedRate() {
         var history = ChargeHistory()
         let start = Date(timeIntervalSince1970: 1_700_000_000)

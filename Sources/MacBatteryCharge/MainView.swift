@@ -95,6 +95,13 @@ struct RootView: View {
         }
     }
 
+    /// 临时充满旁边那句话：固定模式说「这一段」，智能说「拔掉电源」。
+    private var topUpHint: String {
+        let fixed = model.settings.mode == .fixed
+        if model.topUpActive { return fixed ? T("到下一段或拔掉电源时结束") : T("拔掉电源时结束") }
+        return fixed ? T("这一段先充到 100%，拔掉电源时结束") : T("先充到 100%，拔掉电源时结束")
+    }
+
     private var footer: some View {
         HStack(spacing: 10) {
             Button {
@@ -102,8 +109,8 @@ struct RootView: View {
             } label: {
                 Label(model.topUpActive ? T("结束临时充满") : T("临时充满"), systemImage: "bolt.fill")
             }
-            .disabled(!model.battery.present)
-            Text(model.topUpActive ? T("到下一段或拔掉电源时结束") : T("这一段先充到 100%，拔掉电源时结束"))
+            .disabled(!model.topUpAvailable)
+            Text(topUpHint)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)

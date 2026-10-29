@@ -48,6 +48,27 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(journal.today?.powerMinutes, 0)
     }
 
+    /// 读数的间隔可能只有 30 秒（窗口关着）或 2 秒（窗口开着）。不满一分钟的间隔也要算进时长，不能取整成 0。
+    func testShortSampleIntervalsAreCounted() {
+        var journal = HabitJournal()
+        var previous: ChargeSample?
+        for step in 0...240 {
+            let current = ChargeSample(t: base.addingTimeInterval(Double(step) * 30), p: 90, c: false, x: false, l: 80)
+            journal.absorb(current, previous: previous, day: "2026-10-29")
+            previous = current
+        }
+        XCTAssertEqual(Double(journal.today?.batteryMinutes ?? 0), 120, accuracy: 0.5, "两小时用电池，每 30 秒一个读数")
+        XCTAssertEqual(Double(journal.today?.powerMinutes ?? 0), 0, accuracy: 0.5)
+    }
+
+    /// 票数一样多的两个时段，取较早的那个；每次启动结果都要一样。
+    func testTiedBucketsPickTheEarlierOne() {
+        let morning = 10 * 60
+        let evening = 20 * 60
+        XCTAssertEqual(HabitJournal.vote([morning, evening, morning, evening, morning, evening], minSamples: 3),
+                       ClockTime(minuteOfDay: morning))
+    }
+
     /// 拔插只在当天第一次记，白天反复插拔不把习惯冲散。
     /// 每 5 分钟一个读数，按顺序一段一段接着喂，中间的插拔要能被看见。
     private func feed(_ journal: inout HabitJournal, _ segments: [(from: Int, to: Int, external: Bool)]) {
@@ -139,7 +160,7 @@ final class JournalTests: XCTestCase {
         var journal = HabitJournal()
         for (index, full) in [600, 600, 60, 30].enumerated() {
             var record = DayRecord(day: "d\(index)")
-            record.fullMinutes = full
+            record.fullMinutes = Double(full)
             record.batteryMinutes = 120
             record.powerMinutes = 600
             record.celsiusSum = 30 * 10
@@ -186,8 +207,8 @@ final class HabitTipTests: XCTestCase {
         var journal = HabitJournal()
         for index in 0..<days {
             var record = DayRecord(day: "d\(index)")
-            record.fullMinutes = fullMinutes
-            record.batteryMinutes = batteryMinutes
+            record.fullMinutes = Double(fullMinutes)
+            record.batteryMinutes = Double(batteryMinutes)
             record.powerMinutes = 600
             record.hottest = hottest
             record.cycles = 200 + index

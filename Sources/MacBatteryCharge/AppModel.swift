@@ -520,6 +520,8 @@ final class AppModel: ObservableObject {
         }
         if settings.deadlineEnabled != old.deadlineEnabled || settings.deadline != old.deadline
             || settings.unplugTarget != old.unplugTarget || settings.mode != old.mode { deadlineLift = nil }
+        // 临时充满的结束时间是按模式定的，换了模式就重新来。
+        if settings.mode != old.mode { topUpUntil = nil }
         if settings.language != old.language {
             Lang.current = settings.language
             // 菜单栏、窗口标题这些不在 SwiftUI 里的字要自己重画一遍。
@@ -616,12 +618,20 @@ final class AppModel: ObservableObject {
 
     var topUpActive: Bool { topUpUntil != nil }
 
+    /// 一直充满本来就是 100%，不需要临时充满。
+    var topUpAvailable: Bool { battery.present && settings.mode != .full }
+
     func toggleTopUp() {
+        guard topUpAvailable || topUpUntil != nil else { return }
         if topUpUntil != nil {
             topUpUntil = nil
-        } else {
+        } else if settings.mode == .fixed {
+            // 固定模式：充到这一段结束，也就是下一段开始或拔掉电源。
             let ahead = schedule.minutesUntilBoundary(from: minute) ?? 1440
             topUpUntil = Date().addingTimeInterval(Double(ahead) * 60)
+        } else {
+            // 智能没有时间段可以停，所以一直到拔掉电源为止。
+            topUpUntil = Date.distantFuture
         }
         recompute()
         recomputeForecast(force: true)
@@ -833,7 +843,11 @@ final class AppModel: ObservableObject {
                 text += T(" · %@ 起 %@%", ["\(change.at.text)", "\(change.limit)"])
             }
         case .topUp:
-            if let until = topUpUntil { text += T(" · 临时充满到 %@", ["\(Self.clock(until))"]) }
+            if let until = topUpUntil, until != Date.distantFuture {
+                text += T(" · 临时充满到 %@", ["\(Self.clock(until))"])
+            } else {
+                text += T(" · 临时充满，拔掉电源时结束")
+            }
         case .deadline:
             text += T(" · 离电前放开")
         case .heat:
@@ -848,17 +862,24 @@ final class AppModel: ObservableObject {
 
     var tonight: Tonight? {
         let battery = battery
-        guard battery.present, settings.deadlineEnabled, let percent = battery.percent else { return nil }
-        // 智能模式有学到的拔电时间就按它算，否则用用户设的。
-        let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? settings.deadline
+        // 智能模式有学到的拔电时间就按它算；没学会时，只有开着「还没学会时，按一个固定时间备电」才用用户设的时间。
+        let fallback = settings.deadlineEnabled ? settings.deadline : nil
+        guard battery.present, let percent = battery.percent,
+              let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? fallback else { return nil }
         let plan: ChargePlan?
-        if settings.mode == .smart {
+        switch settings.mode {
+        case .smart:
             plan = ChargePlanner.plan(minute: minute, percent: percent, deadline: deadline,
                                       target: settings.unplugTarget, base: settings.smartDailyCap,
                                       rate: learnedRate, window: 1439)
-        } else {
+        case .fixed:
             plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
                                       deadline: deadline, target: settings.unplugTarget,
+                                      rate: learnedRate, window: 1439)
+        case .full:
+            // 一直充满不看时间表，按现在就充来算。base 是 100，所以不会有放开时间。
+            plan = ChargePlanner.plan(minute: minute, percent: percent, deadline: deadline,
+                                      target: settings.unplugTarget, base: 100,
                                       rate: learnedRate, window: 1439)
         }
         guard let plan else { return nil }
@@ -904,8 +925,8 @@ final class AppModel: ObservableObject {
             var record = DayRecord(day: Self.dayKey(date))
             record.lo = 42 + day % 5
             record.hi = day % 3 == 0 ? 100 : 80
-            record.batteryMinutes = 200 + day * 7
-            record.powerMinutes = 900 - day * 5
+            record.batteryMinutes = Double(200 + day * 7)
+            record.powerMinutes = Double(900 - day * 5)
             record.fullMinutes = day % 3 == 0 ? 520 : 40
             record.unplug = 18 * 60 + 40 + day % 12
             record.plug = 9 * 60 + 5

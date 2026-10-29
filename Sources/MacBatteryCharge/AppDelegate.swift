@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(withTitle: T("打开窗口"), action: #selector(openFromMenu), keyEquivalent: "").target = self
         let topUp = menu.addItem(withTitle: model.topUpActive ? T("结束临时充满") : T("临时充满到 100%"), action: #selector(toggleTopUp), keyEquivalent: "")
         topUp.target = self
-        topUp.isEnabled = battery.present
+        topUp.isEnabled = model.topUpAvailable
         let apply = menu.addItem(withTitle: T("立即应用"), action: #selector(applyFromMenu), keyEquivalent: "")
         apply.target = self
         menu.addItem(.separator())

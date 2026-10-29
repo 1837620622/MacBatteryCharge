@@ -10,12 +10,12 @@ public struct DayRecord: Codable, Equatable, Sendable {
     /// 当天最低、最高电量。
     public var lo: Int?
     public var hi: Int?
-    /// 用电池的分钟数。
-    public var batteryMinutes: Int = 0
+    /// 用电池的分钟数。读数可能每 30 秒一次，所以存小数，不能每次取整。
+    public var batteryMinutes: Double = 0
     /// 接着电源的分钟数。
-    public var powerMinutes: Int = 0
+    public var powerMinutes: Double = 0
     /// 接着电源、电量 ≥ 99% 的分钟数。用来发现「一直挂满」。
-    public var fullMinutes: Int = 0
+    public var fullMinutes: Double = 0
     /// 当天第一次拔电源的时刻（一天内的第几分钟）。一天只记第一次。
     public var unplug: Int?
     /// 当天第一次接回电源的时刻。
@@ -83,8 +83,9 @@ public struct HabitJournal: Codable, Equatable, Sendable {
         }
 
         if let previous {
-            let minutes = Int(sample.t.timeIntervalSince(previous.t) / 60)
-            if minutes > 0 && minutes <= Self.maxGapMinutes {
+            // 不取整：读数每 30 秒一次的时候，每一段都不满一分钟，取整会全部变成 0。
+            let minutes = sample.t.timeIntervalSince(previous.t) / 60
+            if minutes > 0 && minutes <= Double(Self.maxGapMinutes) {
                 // 按上一个读数之后的那段状态计：那段时间里机器是什么状态，上一读数说了算。
                 if previous.x {
                     days[index].powerMinutes += minutes
@@ -163,7 +164,9 @@ public struct HabitJournal: Codable, Equatable, Sendable {
         guard values.count >= minSamples else { return nil }
         var buckets: [Int: [Int]] = [:]
         for value in values { buckets[value / 30, default: []].append(value) }
-        guard let best = buckets.max(by: { $0.value.count < $1.value.count }), best.value.count >= minSamples else {
+        // 票数一样多时取较早的一档。字典的遍历顺序每次启动都不一样，不能直接取「第一个」。
+        guard let best = buckets.max(by: { a, b in a.value.count == b.value.count ? a.key > b.key : a.value.count < b.value.count }),
+              best.value.count >= minSamples else {
             return nil
         }
         var counts: [Int: Int] = [:]
