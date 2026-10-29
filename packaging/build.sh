@@ -30,22 +30,21 @@ for base in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$ROOT/build/AppIcon.icns"
 
-# 安装器的资源：左边的图和每种语言的欢迎页、结束页。没有对应语言时用英文。
+# 安装器的资源。background.png 既是左边的图，也是欢迎页和结束页里的图标。
+# 上一版的 AppIcon.png 没有被打进包里（检查报缺），所以图标改用分发包引用的 background.png，每个语言目录各放一份。
+# 语言目录叫 zh_CN、zh_TW：上一版用 zh-Hans 目录时，截图里欢迎页还是英文。
+# 没有对应语言时用顶层的页面，应用默认中文，顶层就放中文。
 INSTALLER="$ROOT/build/installer"
+INSTALLER_LANGS=(en zh_CN zh_TW)
 rm -rf "$INSTALLER"
 mkdir -p "$INSTALLER"
 sips -z 128 128 resources/AppIcon.png --out "$INSTALLER/background.png" >/dev/null
-sips -z 288 288 resources/AppIcon.png --out "$INSTALLER/icon-288.png" >/dev/null
-for lang in "${LANGS[@]}"; do
+for lang in "${INSTALLER_LANGS[@]}"; do
     mkdir -p "$INSTALLER/$lang.lproj"
     cp packaging/installer/"$lang".lproj/*.html "$INSTALLER/$lang.lproj/"
+    cp "$INSTALLER/background.png" "$INSTALLER/$lang.lproj/background.png"
 done
-cp packaging/installer/en.lproj/Welcome.html packaging/installer/en.lproj/Conclusion.html "$INSTALLER/"
-# 页面里的图标直接嵌进 HTML，不依赖安装器怎么拷贝附带的图片。
-for page in "$INSTALLER"/*.html "$INSTALLER"/*.lproj/*.html; do
-    python3 packaging/embed-icon.py "$page" "$INSTALLER/icon-288.png"
-done
-rm -f "$INSTALLER/icon-288.png"
+cp packaging/installer/zh_CN.lproj/Welcome.html packaging/installer/zh_CN.lproj/Conclusion.html "$INSTALLER/"
 
 # DMG 卷图标要求根目录的 Finder 信息里有「自定义图标」这一位（和 SetFile -a C 写的是同一位）。
 # FinderInfo 第 8、9 个字节的 0x0400 就是它。

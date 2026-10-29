@@ -23,19 +23,25 @@ for pkg in "${packages[@]}"; do
     dist_xml="$tmp/x/Distribution"
     [[ -f "$dist_xml" ]] || fail "${name}：不是分发包，没有安装器页面"
     grep -q 'background.png' "$dist_xml" || fail "${name}：安装器没有左边的图"
+    grep -q 'alignment="bottomleft"' "$dist_xml" || fail "${name}：左边的图没放在左下角，会压住步骤列表"
     grep -q 'Welcome.html' "$dist_xml" || fail "${name}：安装器没有欢迎页"
     grep -q 'rootVolumeOnly' "$dist_xml" || fail "${name}：没有限制装在系统盘"
     grep -q 'hostArchitectures' "$dist_xml" || fail "${name}：没有写架构限制"
-    # 出错时把资源目录列出来，方便看到底少了什么。
-    show_resources() { find "$tmp/x/Resources" | sort | head -60; }
-    for file in background.png Welcome.html Conclusion.html \
-        en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
+    # 资源目录每次都列出来，CI 日志里能看到包里实际有什么。
+    show_resources() { find "$tmp/x/Resources" | sort; }
+    show_resources
+    # 顶层和每个语言目录都要有欢迎页、结束页，还有欢迎页引用的 background.png。
+    for file in Welcome.html Conclusion.html background.png \
+        en.lproj/Welcome.html en.lproj/Conclusion.html en.lproj/background.png \
+        zh_CN.lproj/Welcome.html zh_CN.lproj/Conclusion.html zh_CN.lproj/background.png \
+        zh_TW.lproj/Welcome.html zh_TW.lproj/Conclusion.html zh_TW.lproj/background.png; do
         [[ -f "$tmp/x/Resources/$file" ]] || { show_resources; fail "${name}：缺 Resources/$file"; }
     done
-    # 图标嵌在欢迎页里，不靠附带的图片文件。
-    for page in Welcome.html en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
-        grep -q 'data:image/png;base64,' "$tmp/x/Resources/$page" || { show_resources; fail "${name}：$page 里没有嵌入图标"; }
+    for page in Welcome.html en.lproj/Welcome.html zh_CN.lproj/Welcome.html zh_TW.lproj/Welcome.html; do
+        grep -q 'src="background.png"' "$tmp/x/Resources/$page" || { show_resources; fail "${name}：$page 没有引用图标"; }
     done
+    grep -q '充电上限' "$tmp/x/Resources/zh_CN.lproj/Welcome.html" || fail "${name}：中文欢迎页不是中文"
+    grep -q 'Charge Limit' "$tmp/x/Resources/en.lproj/Welcome.html" || fail "${name}：英文欢迎页不是英文"
 
     app_info="$(find "$tmp/x" -path '*/MacBatteryCharge.app/Contents/Info.plist' -print -quit)"
     [[ -n "$app_info" ]] || fail "${name}：包里没有 MacBatteryCharge.app"
