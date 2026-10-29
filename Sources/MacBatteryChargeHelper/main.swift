@@ -191,9 +191,10 @@ func serve() {
     var address = sockaddr_un()
     address.sun_family = sa_family_t(AF_UNIX)
     let path = HelperInfo.socketPath
+    let pathSize = MemoryLayout.size(ofValue: address.sun_path)
     withUnsafeMutablePointer(to: &address.sun_path) { pointer in
-        pointer.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: address.sun_path)) { chars in
-            _ = path.withCString { strncpy(chars, $0, MemoryLayout.size(ofValue: address.sun_path) - 1) }
+        pointer.withMemoryRebound(to: CChar.self, capacity: pathSize) { chars in
+            _ = path.withCString { strncpy(chars, $0, pathSize - 1) }
         }
     }
     let bound = withUnsafePointer(to: &address) { pointer in
