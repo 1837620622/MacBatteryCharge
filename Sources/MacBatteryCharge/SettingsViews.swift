@@ -18,6 +18,11 @@ struct SettingsView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding(16)
+            if let message = model.message {
+                MessageLine(message: message) { model.dismissMessage() }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
             Form {
                 Section(T("通用")) {
                     Picker(T("语言"), selection: $model.settings.language) {
@@ -81,6 +86,17 @@ struct SettingsView: View {
                     Text(T("作者 %@", ["\(AppInfo.author)"]))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Text(Support.personalIntro)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Link(T("支持这个项目"), destination: Support.personalPage)
+                    Link(T("企业合作"), destination: Support.enterprisePage)
+                } header: {
+                    Text(T("赞助"))
                 }
             }
             .formStyle(.grouped)

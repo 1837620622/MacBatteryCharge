@@ -63,7 +63,7 @@ public enum HabitTips {
         if recent.allSatisfy({ $0.batteryHours < 0.5 }) {
             tips.append(HabitTip(.alwaysPlugged, "powerplug.fill",
                                  T("这一周几乎一直插着电源"),
-                                 T("电池长期不用也会老化。固定模式里可以打开放电，每天让它动一动。")))
+                                 T("一直插着电源时，电池长时间停在高电量最伤电池。日常上限设在 80%，比一直满电好。")))
         }
 
         // 温度。

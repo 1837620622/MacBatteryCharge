@@ -52,9 +52,11 @@ public enum Advice {
             }
         }
 
-        if let celsius = battery.celsius {
+        // 偏热的时候上面已经有一句「电池偏热，先停在 80%」，这里不再说「正常」，免得两句打架。
+        // 「偏高」和过热保护用同一个温度（ChargePolicy.heatOn），不能一边说偏高、一边说正常。
+        if let celsius = battery.celsius, !heatActive {
             let text = String(format: "%.1f°C", celsius)
-            if celsius >= 40 {
+            if celsius >= ChargePolicy.heatOn {
                 items.append(AdviceItem(.warn, "thermometer.high", T("电池 %@，偏高。", ["\(text)"])))
             } else if celsius >= 10 {
                 items.append(AdviceItem(.good, "thermometer.medium", T("电池 %@，正常。", ["\(text)"])))

@@ -128,12 +128,19 @@ public struct BatterySnapshot: Equatable, Sendable {
         externalConnected = Reading.flag(reg["ExternalConnected"]) ?? ((ps["Power Source State"] as? String) == "AC Power")
         fullyCharged = Reading.flag(reg["FullyCharged"]) ?? Reading.flag(ps["Is Charged"]) ?? false
 
-        if let minutes = Reading.integer(ps["Time to Empty"]), minutes > 0, !externalConnected { minutesToEmpty = minutes }
-        if let minutes = Reading.integer(ps["Time to Full Charge"]), minutes > 0, externalConnected { minutesToFull = minutes }
+        if !externalConnected { minutesToEmpty = Self.plausibleMinutes(ps["Time to Empty"]) }
+        if externalConnected { minutesToFull = Self.plausibleMinutes(ps["Time to Full Charge"]) }
         if let watts = Reading.integer(adapter?["Watts"]), watts > 0 { adapterWatts = watts }
     }
 
     static func rounded(_ value: Double) -> Int { Int((value).rounded()) }
+
+    /// 系统还算不出时间的时候，IOPS 给的是 65535（约 1092 小时）。那不是时间，当作没有；
+    /// 超过一天的估计也不可信，同样不显示。
+    static func plausibleMinutes(_ value: Any?) -> Int? {
+        guard let minutes = Reading.integer(value), minutes > 0, minutes < 24 * 60 else { return nil }
+        return minutes
+    }
 
     /// 健康度：标称容量（没有时用满充容量）相对设计容量。
     public var health: Int? {

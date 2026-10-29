@@ -120,6 +120,15 @@ public enum SmartPolicy {
         return dailyCapChoices.min(by: { abs($0 - clamped) < abs($1 - clamped) }) ?? defaultDailyCap
     }
 
+    /// 预测里用的时间表：整天停在 `cap`。拼成两段，中间没有空档，免得空档被当成 100%。
+    public static func flatSchedule(cap: Int) -> Schedule {
+        let halves = [
+            Interval(start: ClockTime(hour: 0, minute: 0), end: ClockTime(hour: 12, minute: 0), limit: cap),
+            Interval(start: ClockTime(hour: 12, minute: 0), end: ClockTime(hour: 0, minute: 0), limit: cap),
+        ]
+        return (try? Schedule.compile(halves).get()) ?? .empty
+    }
+
     public static func decide(_ input: SmartInput) -> SmartDecision {
         let cap = clampDailyCap(input.dailyCap)
         let target = ChargePlanner.clampTarget(input.unplugTarget)

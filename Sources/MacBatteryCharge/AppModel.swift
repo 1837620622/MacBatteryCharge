@@ -154,6 +154,11 @@ final class AppModel: ObservableObject {
     /// 从历史里学到的拔电源时间，智能模式用。
     /// 学到的「平时几点拔电源」。关掉学习、或者记录还不够，就是 nil。
     var learnedUnplug: ClockTime? { settings.learnHabits ? journal.learnedUnplug() : nil }
+    /// 备电要按的离电时间。智能模式先用学到的；没学会，或者是别的模式，就用自己设的那个（开着才有）。
+    var departureTime: ClockTime? {
+        if settings.mode == .smart, let learned = learnedUnplug { return learned }
+        return settings.deadlineEnabled ? settings.deadline : nil
+    }
     /// 智能模式这一轮算出来的结果，界面用它说人话。
     private(set) var smartDecision: SmartDecision?
 
@@ -516,14 +521,23 @@ final class AppModel: ObservableObject {
             return
         }
         forecast = Forecast.points(
-            schedule: schedule, minute: minute, percent: percent,
+            schedule: forecastSchedule, minute: minute, percent: percent,
             external: battery.externalConnected || adapterCut,
-            deadline: settings.deadlineEnabled ? (learnedUnplug ?? settings.deadline) : nil,
+            deadline: departureTime,
             target: settings.unplugTarget,
             chargeRate: learnedRate,
-            dischargeAvailable: helperUsable && !dischargeOffToday,
+            dischargeAvailable: settings.mode == .fixed && helperUsable && !dischargeOffToday,
             topUpMinutes: topUpUntil.map { max(0, Int($0.timeIntervalSince(now) / 60)) },
             horizon: 480)
+    }
+
+    /// 预测按的时间表。固定模式就是用户排的那张；智能模式是整天停在平时的上限；一直充满没有时间表，空档就是 100%。
+    private var forecastSchedule: Schedule {
+        switch settings.mode {
+        case .fixed: return schedule
+        case .smart: return SmartPolicy.flatSchedule(cap: SmartPolicy.clampDailyCap(settings.smartDailyCap))
+        case .full: return .empty
+        }
     }
 
     // MARK: 设置
@@ -628,7 +642,8 @@ final class AppModel: ObservableObject {
 
     func addInterval() {
         guard canAddInterval, let slot = Schedule.firstFreeSlot(in: settings.intervals) else { return }
-        let item = Interval(start: slot.start, end: slot.end, limit: 100)
+        // 默认停在 80%：加段多半是为了少满电，设成 100% 就和空档一样，看不出加了什么。
+        let item = Interval(start: slot.start, end: slot.end, limit: 80)
         settings.intervals.append(item)
         settings.intervals.sort { $0.start < $1.start }
         editingID = item.id
@@ -672,8 +687,6 @@ final class AppModel: ObservableObject {
         onStatusChange?()
         autoApplyLimit()
     }
-
-    // MARK: 立即应用
 
     // MARK: 立即应用
 
@@ -835,9 +848,9 @@ final class AppModel: ObservableObject {
         } else {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(body, forType: .string)
-            fail(T("诊断信息太长，放不进网址。已经复制到剪贴板，在打开的页面里粘贴到正文就行。"))
+            message = Message(tone: .info, text: T("诊断信息太长，放不进网址。已经复制到剪贴板，在打开的页面里粘贴到正文就行。"))
         }
-        var components = URLComponents(string: "https://github.com/1837620622/MacFullBar/issues/new")
+        var components = URLComponents(url: AppInfo.newIssuePage, resolvingAgainstBaseURL: false)
         components?.queryItems = items
         if let url = components?.url { NSWorkspace.shared.open(url) }
     }
@@ -860,11 +873,6 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: 文字
-
-    /// 窗口上那一句话：今天的时间表。
-    var daySummary: String {
-        schedule.dayLine(deadline: settings.deadlineEnabled ? settings.deadline : nil)
-    }
 
     /// 出问题时复制给开发者。只有这台机器的读数和帮手状态，没有账号和个人信息。
     /// 诊断里写清楚这一台的上限到底是谁在管，免得用户以为软件在护电池。
@@ -957,10 +965,7 @@ final class AppModel: ObservableObject {
 
     var tonight: Tonight? {
         let battery = battery
-        // 智能模式有学到的拔电时间就按它算；没学会时，只有开着「还没学会时，先按一个固定时间」才用用户设的时间。
-        let fallback = settings.deadlineEnabled ? settings.deadline : nil
-        guard battery.present, let percent = battery.percent,
-              let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? fallback else { return nil }
+        guard battery.present, let percent = battery.percent, let deadline = departureTime else { return nil }
         let plan: ChargePlan?
         switch settings.mode {
         case .smart:

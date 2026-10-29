@@ -42,11 +42,13 @@ struct RootView: View {
                     if let message = model.message {
                         MessageLine(message: message) { model.dismissMessage() }
                     }
+                    // 时间表有错要改好才会消失，所以这一行没有「关掉」。
                     if let error = model.scheduleError {
-                        MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
+                        MessageLine(message: AppModel.Message(tone: .error, text: error.message))
                     }
                     UpdateBanner(model: model)
                     tonightCard
+                    curve
                     Picker(T("模式"), selection: modeBinding) {
                         ForEach(ChargeMode.allCases, id: \.self) { mode in
                             Text(mode.title).tag(mode)
@@ -58,7 +60,10 @@ struct RootView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     modePanel
-                    footer
+                    // 一直充满本来就是 100%，临时充满没有用，也就不放这一行。
+                    if model.settings.mode != .full {
+                        footer
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 18)
@@ -109,6 +114,14 @@ struct RootView: View {
     }
 
     /// 今晚的计划放在最上面：这是人最想知道的一句话，不用在别处找。
+    /// 电量曲线：过去 16 小时和之后 8 小时的预测。还没有读数时不占地方。
+    @ViewBuilder private var curve: some View {
+        let samples = model.history.samples(since: Date().addingTimeInterval(-TimeInterval(ChargeCurve.pastMinutes * 60)))
+        if !samples.isEmpty {
+            ChargeCurve(samples: samples, forecast: model.forecast, now: Date())
+        }
+    }
+
     @ViewBuilder private var tonightCard: some View {
         if let tonight = model.tonight {
             let tint = tonightTint(tonight.tone)
@@ -199,7 +212,8 @@ struct RootView: View {
 /// 一行提示：出错、写上限失败、时间表有问题都从这里说。
 struct MessageLine: View {
     var message: AppModel.Message
-    var dismiss: () -> Void
+    /// 有「关掉」动作才显示 ×。
+    var dismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -209,13 +223,15 @@ struct MessageLine: View {
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            if let dismiss {
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(T("关掉这条提示"))
             }
-            .buttonStyle(.plain)
-            .help(T("关掉这条提示"))
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint.opacity(0.12)))

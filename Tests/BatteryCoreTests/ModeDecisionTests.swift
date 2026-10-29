@@ -100,6 +100,28 @@ final class ModeDecisionTests: XCTestCase {
     // MARK: 旧文件
 
     /// 没有 mode 这一项的老文件，行为就是按时间表，所以升级后是固定模式，不是智能。
+    /// 预测用的「整天停在上限」时间表：不能有空档（空档是 100%），每一分钟都是这个上限。
+    func testSmartForecastScheduleHoldsTheCapAllDay() {
+        let flat = SmartPolicy.flatSchedule(cap: 85)
+        XCTAssertFalse((0..<1440).contains { flat.isGap(at: $0) }, "整天没有空档")
+        XCTAssertTrue((0..<1440).allSatisfy { flat.limit(at: $0) == 85 })
+    }
+
+    /// 预测和实际执行要用同一套算法：拿整天停在上限的时间表算出来的放开时间，要和智能模式实际用的一样。
+    func testSmartForecastMatchesWhatSmartModeDoes() throws {
+        let flat = SmartPolicy.flatSchedule(cap: 80)
+        let deadline = ClockTime(hour: 18, minute: 30)
+        for hour in [14, 16, 17] {
+            let minute = at(hour, 0)
+            let fromSchedule = ChargePlanner.plan(schedule: flat, minute: minute, percent: 60, deadline: deadline,
+                                                  target: 100, rate: nil, window: 1439)
+            let fromSmart = ChargePlanner.plan(minute: minute, percent: 60, deadline: deadline, target: 100,
+                                               base: 80, rate: nil, window: 1439)
+            XCTAssertEqual(fromSchedule?.liftNow, fromSmart?.liftNow, "\(hour):00")
+            XCTAssertEqual(fromSchedule?.etaMinutes, fromSmart?.etaMinutes, "\(hour):00")
+        }
+    }
+
     func testOldSettingsFileStaysOnTheScheduleAndLearns() throws {
         let settings = try XCTUnwrap(AppSettings.decode(Data(#"{"intervals":[{"start":"06:00","end":"21:00","limit":80}]}"#.utf8)))
         XCTAssertEqual(settings.mode, .fixed)

@@ -39,7 +39,7 @@ struct SmartPanel: View {
                 DisclosureGroup(isExpanded: $showDetails) {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle(T("记住我的充电习惯"), isOn: $model.settings.learnHabits)
-                        Text(T("每天第一次长时间接着电源后拔掉，就记作一次。记满 %@ 次，就按平时的时间来。", ["\(HabitJournal.minLearnCount)"]))
+                        Text(T("每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。", ["\(HabitJournal.minLearnCount)"]))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Toggle(T("还没学会时，先按一个固定时间"), isOn: $model.settings.deadlineEnabled)

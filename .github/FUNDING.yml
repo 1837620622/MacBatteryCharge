@@ -1,3 +1,3 @@
 # GitHub 会在仓库页显示一个「Sponsor」按钮，指向这里列的地方。
-# custom 可以写多个链接，按顺序显示。
-custom: ["https://github.com/1837620622/MacBatteryCharge/blob/main/README.md#赞助"]
+# 目前只有 README 的「赞助」一节，接了收款渠道以后再加。
+custom: ["https://github.com/1837620622/MacFullBar/blob/main/README.md#赞助"]
