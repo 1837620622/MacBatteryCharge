@@ -48,21 +48,21 @@ public enum PowerFlow: Equatable, Sendable {
     /// 菜单栏下排，四个字以内。
     public var menuWord: String {
         switch self {
-        case .noBattery: return "无电池"
-        case .charging: return "充电"
-        case .discharging: return "放电"
-        case .plugged: return "接通"
-        case .battery: return "电池"
+        case .noBattery: return T("无电池")
+        case .charging: return T("充电")
+        case .discharging: return T("放电")
+        case .plugged: return T("接通")
+        case .battery: return T("电池")
         }
     }
 
     public var sentence: String {
         switch self {
-        case .noBattery: return "没有内置电池"
-        case .charging: return "正在充电"
-        case .discharging: return "正在放电"
-        case .plugged: return "电源直接供电"
-        case .battery: return "用电池"
+        case .noBattery: return T("没有内置电池")
+        case .charging: return T("正在充电")
+        case .discharging: return T("正在放电")
+        case .plugged: return T("电源直接供电")
+        case .battery: return T("用电池")
         }
     }
 }

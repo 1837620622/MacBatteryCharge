@@ -16,6 +16,11 @@ private func compiled(_ items: [Interval]) -> Schedule {
 }
 
 final class ScheduleTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testDefaults() {
         let schedule = compiled(Schedule.makeDefaults())
         XCTAssertEqual(schedule.limit(at: at(5, 59)), 100, "05:59 应为 100")
@@ -82,6 +87,11 @@ final class ScheduleTests: XCTestCase {
 }
 
 final class SettingsTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testLegacyFile() throws {
         let json = """
         {"guideSeen": true, "launchAtLogin": false, "lowPowerAuto": true,
@@ -120,6 +130,11 @@ final class SettingsTests: XCTestCase {
 }
 
 final class BatteryTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     let sample: [String: Any] = [
         "CurrentCapacity": 100, "MaxCapacity": 100, "InstantAmperage": 0, "Voltage": 12578,
         "CycleCount": 618, "DesignCycleCount9C": 1000, "DesignCapacity": 5103,
@@ -193,6 +208,11 @@ final class BatteryTests: XCTestCase {
 }
 
 final class AdviceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testNoBattery() {
         let items = Advice.items(battery: BatterySnapshot(), memory: MemorySnapshot(), limit: 80, heatActive: false)
         XCTAssertTrue(items.first?.text.contains("没有内置电池") == true, "台式机不要装成有电池")
@@ -242,6 +262,11 @@ final class AdviceTests: XCTestCase {
 }
 
 final class PlannerTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testPolicy() {
         let schedule = compiled(Schedule.makeDefaults())
         XCTAssertEqual(ChargePolicy.decide(schedule: schedule, minute: at(10, 0), topUp: false, deadlineLift: nil, heat: false).limit, 80)
@@ -258,22 +283,43 @@ final class PlannerTests: XCTestCase {
     func testDefaultScheduleIsEarlyEnough() {
         let schedule = compiled(Schedule.makeDefaults())
         let plan = ChargePlanner.plan(schedule: schedule, minute: at(20, 0), percent: 80,
-                                      deadline: ClockTime(hour: 23, minute: 30), rate: nil)
+                                      deadline: ClockTime(hour: 23, minute: 30), target: 100, rate: nil)
         XCTAssertEqual(plan?.target, 100)
         XCTAssertEqual(plan?.liftNow, false, "21:00 放开来得及")
         XCTAssertEqual(plan?.etaMinutes, 60 + 61, "21:00 起约一小时充满")
         XCTAssertEqual(plan?.reachesInTime, true)
     }
 
+    /// 离电目标独立于日常上限：白天 80% 的日子，离电目标仍然是 100%。
+    func testUnplugTargetIsIndependentOfDaytimeLimit() {
+        let schedule = compiled([interval("06:00", "23:59", 80)])
+        let deadline = ClockTime(hour: 23, minute: 30)
+        let plan = ChargePlanner.plan(schedule: schedule, minute: at(12, 0), percent: 50,
+                                      deadline: deadline, target: 100, rate: 0.33, window: 1439)
+        XCTAssertEqual(plan?.target, 100, "一整天都是 80% 的段，离电目标还是 100%")
+        XCTAssertEqual(plan?.liftNow, false, "中午还早")
+        let close = ChargePlanner.plan(schedule: schedule, minute: at(23, 0), percent: 80,
+                                       deadline: deadline, target: 100, rate: 0.33)
+        XCTAssertEqual(close?.liftNow, true, "离断电只剩 30 分钟，61 分钟的路走不完，要立刻放开")
+    }
+
+    func testUnplugTargetClampedToChoices() {
+        XCTAssertEqual(ChargePlanner.clampTarget(100), 100)
+        XCTAssertEqual(ChargePlanner.clampTarget(91), 90)
+        XCTAssertEqual(ChargePlanner.clampTarget(79), 80)
+        XCTAssertEqual(ChargePlanner.clampTarget(200), 100)
+        XCTAssertEqual(ChargePlanner.clampTarget(0), 80)
+    }
+
     func testLateScheduleLiftsEarlier() {
         let late = compiled([interval("06:00", "23:00", 80), interval("23:00", "06:00", 100)])
         let deadline = ClockTime(hour: 23, minute: 30)
-        let early = ChargePlanner.plan(schedule: late, minute: at(21, 0), percent: 80, deadline: deadline, rate: 0.33)
+        let early = ChargePlanner.plan(schedule: late, minute: at(21, 0), percent: 80, deadline: deadline, target: 100, rate: 0.33)
         XCTAssertEqual(early?.liftNow, false, "21:00 还早")
-        let now = ChargePlanner.plan(schedule: late, minute: at(22, 14), percent: 80, deadline: deadline, rate: 0.33)
+        let now = ChargePlanner.plan(schedule: late, minute: at(22, 14), percent: 80, deadline: deadline, target: 100, rate: 0.33)
         XCTAssertEqual(now?.liftNow, true, "61 分钟 + 15 分钟余量，22:14 就要放开")
-        XCTAssertNil(ChargePlanner.plan(schedule: late, minute: at(10, 0), percent: 80, deadline: deadline, rate: nil), "离断电太远不算")
-        let full = ChargePlanner.plan(schedule: late, minute: at(22, 30), percent: 100, deadline: deadline, rate: nil)
+        XCTAssertNil(ChargePlanner.plan(schedule: late, minute: at(10, 0), percent: 80, deadline: deadline, target: 100, rate: nil), "离断电太远不算")
+        let full = ChargePlanner.plan(schedule: late, minute: at(22, 30), percent: 100, deadline: deadline, target: 100, rate: nil)
         XCTAssertEqual(full?.liftNow, false)
         XCTAssertEqual(full?.etaMinutes, 0)
     }
@@ -310,6 +356,11 @@ final class PlannerTests: XCTestCase {
 }
 
 final class TextTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        pinChineseUI()
+    }
+
     func testVersions() {
         XCTAssertTrue(AppVersion.isNewer("v2.0.1", than: "2.0.0"), "新版本应判断为更新")
         XCTAssertFalse(AppVersion.isNewer("v2.0.0", than: "2.0.0"), "相同版本不是更新")

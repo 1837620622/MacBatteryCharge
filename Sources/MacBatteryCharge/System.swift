@@ -26,8 +26,17 @@ enum Shell {
         } catch {
             return Output(status: -1, out: "", err: error.localizedDescription)
         }
+        // 两条管道必须同时读：先读完 stdout 再读 stderr，子进程写满另一个管道时会卡死，
+        // 而我们在这里等它退出——互相等就是死锁。所以 stderr 放到后台读。
+        var errData = Data()
+        let reading = DispatchGroup()
+        reading.enter()
+        DispatchQueue.global(qos: .utility).async {
+            errData = err.fileHandleForReading.readDataToEndOfFile()
+            reading.leave()
+        }
         let outData = out.fileHandleForReading.readDataToEndOfFile()
-        let errData = err.fileHandleForReading.readDataToEndOfFile()
+        reading.wait()
         process.waitUntilExit()
         return Output(status: process.terminationStatus,
                       out: String(decoding: outData, as: UTF8.self),
@@ -54,7 +63,7 @@ enum Shell {
         let result = run("/usr/bin/osascript", ["-e", apple])
         if result.status == 0 { return .ok }
         if result.err.contains("-128") { return .cancelled }
-        return .failed(result.err.isEmpty ? "系统没有执行" : result.err)
+        return .failed(result.err.isEmpty ? T("系统没有执行") : result.err)
     }
 }
 
@@ -81,9 +90,9 @@ enum ChargeBridge {
     static func read() -> ChargeLimitState {
         queue.sync {
             var error: NSString?
-            guard MBCChargeSupported(&error) else { return .unsupported(error as String? ?? "这台 Mac 不支持系统充电上限") }
+            guard MBCChargeSupported(&error) else { return .unsupported(error as String? ?? T("这台 Mac 不支持系统充电上限")) }
             var limit = 0
-            guard MBCChargeGetLimit(&limit, &error) else { return .unsupported(error as String? ?? "读不到充电上限") }
+            guard MBCChargeGetLimit(&limit, &error) else { return .unsupported(error as String? ?? T("读不到充电上限")) }
             return .current(limit)
         }
     }
@@ -91,9 +100,9 @@ enum ChargeBridge {
     static func write(_ limit: Int) -> String? {
         queue.sync {
             var error: NSString?
-            guard MBCChargeSupported(&error) else { return error as String? ?? "这台 Mac 不支持系统充电上限" }
+            guard MBCChargeSupported(&error) else { return error as String? ?? T("这台 Mac 不支持系统充电上限") }
             if MBCChargeSetLimit(limit, &error) { return nil }
-            return error as String? ?? "设置充电上限失败"
+            return error as String? ?? T("设置充电上限失败")
         }
     }
 }
@@ -203,7 +212,7 @@ enum LowPowerWriter {
         var commands: [String] = []
         if hasBattery { commands.append("/usr/bin/pmset -b \(key) \(modes.battery)") }
         commands.append("/usr/bin/pmset -c \(key) \(modes.ac)")
-        switch Shell.runAsAdmin(commands.joined(separator: "; "), prompt: "充电上限要按这一段的设置修改低电量模式。") {
+        switch Shell.runAsAdmin(commands.joined(separator: "; "), prompt: T("充电上限要按这一段的设置修改低电量模式。")) {
         case .ok: return .done
         case .cancelled: return .cancelled
         case .failed(let text): return .failed(text)

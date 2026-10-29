@@ -85,6 +85,29 @@ public struct ChargeHistory: Codable, Equatable, Sendable {
         return max(0.05, min(3, gained / minutes))
     }
 
+    /// 从自己的记录里学「平时几点拔电源」。只用来给智能模式提前备电。
+    ///
+    /// 做法很朴素：把每次「接着电源」变成「没接」的那一分钟记下来，按 30 分钟一档投票，
+    /// 取票数最多的一档里最早的那次。要求至少有 `minSamples` 次，否则不猜。
+    /// 返回的是那一次的那个时刻，不是平均——平均会把两次不同的作息揉成一个不存在的时间。
+    public func learnedUnplug(minSamples: Int = 3, calendar: Calendar = .current) -> ClockTime? {
+        var buckets: [Int: [Int]] = [:]
+        for (a, b) in zip(samples, samples.dropFirst()) where a.x && !b.x {
+            let parts = calendar.dateComponents([.hour, .minute], from: b.t)
+            guard let hour = parts.hour, let minute = parts.minute else { continue }
+            let ofDay = hour * 60 + minute
+            buckets[ofDay / 30, default: []].append(ofDay)
+        }
+        guard let best = buckets.max(by: { $0.value.count < $1.value.count }), best.value.count >= minSamples else {
+            return nil
+        }
+        // 同一档里取出现最多的那次；并列时取最早的。
+        var counts: [Int: Int] = [:]
+        for value in best.value { counts[value, default: 0] += 1 }
+        let top = counts.max { a, b in a.value == b.value ? a.key > b.key : a.value < b.value }
+        return top.map { ClockTime(minuteOfDay: $0.key) }
+    }
+
     public static func load(from url: URL) -> ChargeHistory {
         guard let data = try? Data(contentsOf: url) else { return ChargeHistory() }
         let decoder = JSONDecoder()

@@ -20,7 +20,8 @@ public enum Forecast {
     public static let defaultDrainRate = 0.17
 
     public static func points(schedule: Schedule, minute: Int, percent: Int, external: Bool,
-                              deadline: ClockTime?, chargeRate: Double?, drainRate: Double = defaultDrainRate,
+                              deadline: ClockTime?, target: Int = ChargePlanner.defaultTarget,
+                              chargeRate: Double?, drainRate: Double = defaultDrainRate,
                               dischargeAvailable: Bool, topUpMinutes: Int? = nil,
                               horizon: Int = 720, step: Int = 5) -> [ForecastPoint] {
         let rate = max(0.05, min(3, chargeRate ?? ChargePlanner.defaultRate))
@@ -37,7 +38,7 @@ public enum Forecast {
             let now = minute + ahead
             if let deadline, external, lift == nil,
                let plan = ChargePlanner.plan(schedule: schedule, minute: now, percent: Int(p.rounded(.down)),
-                                             deadline: deadline, rate: rate), plan.liftNow {
+                                             deadline: deadline, target: target, rate: rate), plan.liftNow {
                 lift = plan.target
             }
             let topUp = topUpMinutes.map { ahead < $0 } ?? false

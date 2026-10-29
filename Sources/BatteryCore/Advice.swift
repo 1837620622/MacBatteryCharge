@@ -25,62 +25,62 @@ public enum Advice {
     public static func items(battery: BatterySnapshot, memory: MemorySnapshot, limit: Int?, heatActive: Bool,
                              discharging: Bool = false) -> [AdviceItem] {
         guard battery.present else {
-            return [AdviceItem(.info, "powerplug", "没有内置电池。")]
+            return [AdviceItem(.info, "powerplug", T("没有内置电池。"))]
         }
         var items: [AdviceItem] = []
         let flow = battery.flow
 
         if heatActive {
-            items.append(AdviceItem(.warn, "thermometer.high", "电池偏热，先停在 80%。"))
+            items.append(AdviceItem(.warn, "thermometer.high", T("电池偏热，先停在 80%。")))
         }
 
         if let percent = battery.percent, let limit {
             if discharging {
-                items.append(AdviceItem(.info, "arrow.down.circle", "放电中，放到 \(limit)% 停。"))
+                items.append(AdviceItem(.info, "arrow.down.circle", T("放电中，放到 %@% 停。", ["\(limit)"])))
             } else if battery.externalConnected && percent > limit + 2 {
-                items.append(AdviceItem(.info, "arrow.down.right", "高于上限 \(limit)%，只停充，不放电。"))
+                items.append(AdviceItem(.info, "arrow.down.right", T("高于上限 %@%，只停充，不放电。", ["\(limit)"])))
             } else if flow == .plugged && percent >= limit - 1 {
-                items.append(AdviceItem(.good, "checkmark.circle", "停在上限，电源直接供电。"))
+                items.append(AdviceItem(.good, "checkmark.circle", T("停在上限，电源直接供电。")))
             }
         }
 
         if let watts = battery.adapterWatts, battery.externalConnected {
             if flow == .discharging && !discharging {
-                items.append(AdviceItem(.warn, "bolt.trianglebadge.exclamationmark", "充电器 \(watts) W 跟不上耗电。"))
+                items.append(AdviceItem(.warn, "bolt.trianglebadge.exclamationmark", T("充电器 %@ W 跟不上耗电。", ["\(watts)"])))
             } else if watts < 30 && flow == .charging {
-                items.append(AdviceItem(.info, "tortoise", "充电器 \(watts) W，充得慢。"))
+                items.append(AdviceItem(.info, "tortoise", T("充电器 %@ W，充得慢。", ["\(watts)"])))
             }
         }
 
         if let celsius = battery.celsius {
             let text = String(format: "%.1f°C", celsius)
             if celsius >= 40 {
-                items.append(AdviceItem(.warn, "thermometer.high", "电池 \(text)，偏高。"))
+                items.append(AdviceItem(.warn, "thermometer.high", T("电池 %@，偏高。", ["\(text)"])))
             } else if celsius >= 10 {
-                items.append(AdviceItem(.good, "thermometer.medium", "电池 \(text)，正常。"))
+                items.append(AdviceItem(.good, "thermometer.medium", T("电池 %@，正常。", ["\(text)"])))
             } else {
-                items.append(AdviceItem(.info, "thermometer.low", "电池 \(text)，偏冷，充得慢。"))
+                items.append(AdviceItem(.info, "thermometer.low", T("电池 %@，偏冷，充得慢。", ["\(text)"])))
             }
         }
         if battery.thermallyLimited {
-            items.append(AdviceItem(.info, "thermometer.sun", "曾因过热放慢充电。"))
+            items.append(AdviceItem(.info, "thermometer.sun", T("曾因过热放慢充电。")))
         }
 
         if let health = battery.health {
             if health < 80 {
-                items.append(AdviceItem(.warn, "heart", "健康约 \(health)%，可考虑换电池。"))
+                items.append(AdviceItem(.warn, "heart", T("健康约 %@%，可考虑换电池。", ["\(health)"])))
             } else {
-                items.append(AdviceItem(.good, "heart", "健康约 \(health)%（估算）。"))
+                items.append(AdviceItem(.good, "heart", T("健康约 %@%（估算）。", ["\(health)"])))
             }
         }
         if let cycles = battery.cycles, let design = battery.designCycles, design > 0, cycles * 10 >= design * 8 {
-            items.append(AdviceItem(.warn, "arrow.triangle.2.circlepath", "循环 \(cycles) / \(design) 次，已用掉大半。"))
+            items.append(AdviceItem(.warn, "arrow.triangle.2.circlepath", T("循环 %@ / %@ 次，已用掉大半。", ["\(cycles)", "\(design)"])))
         }
 
         if memory.pressure >= 4 && flow == .discharging {
-            items.append(AdviceItem(.warn, "memorychip", "放电中，内存也紧。关掉不用的软件。"))
+            items.append(AdviceItem(.warn, "memorychip", T("放电中，内存也紧。关掉不用的软件。")))
         } else if memory.pressure >= 4 {
-            items.append(AdviceItem(.info, "memorychip", "内存压力高。"))
+            items.append(AdviceItem(.info, "memorychip", T("内存压力高。")))
         }
         return items
     }

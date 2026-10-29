@@ -82,7 +82,7 @@ struct InfoButton: View {
         }
         .buttonStyle(.plain)
         .help(text)
-        .accessibilityLabel("说明")
+        .accessibilityLabel(T("说明"))
         .accessibilityHint(text)
         .popover(isPresented: $shown, arrowEdge: .bottom) {
             Text(text)
@@ -124,7 +124,7 @@ struct LiveDot: View {
                 .frame(width: 6, height: 6)
                 .scaleEffect(pulse ? 1.7 : 1)
                 .opacity(pulse ? 0.45 : 1)
-            Text("实时").font(.caption2).foregroundStyle(.secondary)
+            Text(T("实时")).font(.caption2).foregroundStyle(.secondary)
         }
         .onChange(of: stamp) { _ in
             pulse = true
@@ -133,7 +133,7 @@ struct LiveDot: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("数据实时更新")
+        .accessibilityLabel(T("数据实时更新"))
     }
 }
 
@@ -273,9 +273,9 @@ struct FlowStrip: View {
     }
 
     private var adapterText: String? {
-        if adapterCut { return "已断开" }
-        guard plugged else { return "未接" }
-        return adapterWatts.map { "\($0) W" } ?? "已接"
+        if adapterCut { return T("已断开") }
+        guard plugged else { return T("未接") }
+        return adapterWatts.map { "\($0) W" } ?? T("已接")
     }
 
     private var batteryText: String {
@@ -292,8 +292,8 @@ struct FlowStrip: View {
 
     private var accessibilityText: String {
         var parts: [String] = []
-        parts.append(adapterCut ? "电源适配器已断开" : (plugged ? "接着电源" : "没接电源"))
-        parts.append(charging ? "电池正在充入" : (draining ? "电池正在放出" : "电池不进不出"))
+        parts.append(adapterCut ? T("电源适配器已断开") : (plugged ? T("接着电源") : T("没接电源")))
+        parts.append(charging ? T("电池正在充入") : (draining ? T("电池正在放出") : T("电池不进不出")))
         return parts.joined(separator: "，")
     }
 }
@@ -379,8 +379,8 @@ struct TimelineBar: View {
 
     private var accessibilityText: String {
         let parts = schedule.blocks.map { block in
-            "\(ClockTime(minuteOfDay: block.start).text) 起 \(block.limit)%" + (block.index == nil ? "（空档）" : "")
+            T("%@ 起 %@%", ["\(ClockTime(minuteOfDay: block.start).text)", "\(block.limit)"]) + (block.index == nil ? T("（空档）") : "")
         }
-        return "时间表：" + parts.joined(separator: "，")
+        return T("时间表：") + parts.joined(separator: "，")
     }
 }

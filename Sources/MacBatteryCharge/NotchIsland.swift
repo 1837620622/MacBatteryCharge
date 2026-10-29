@@ -336,9 +336,9 @@ struct IslandView: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
-                islandButton(model.topUpActive ? "结束临时充满" : "临时充满", symbol: "bolt.fill") { model.toggleTopUp() }
+                islandButton(model.topUpActive ? T("结束临时充满") : T("临时充满"), symbol: "bolt.fill") { model.toggleTopUp() }
                     .disabled(!battery.present)
-                islandButton("打开窗口", symbol: "macwindow") { onOpen() }
+                islandButton(T("打开窗口"), symbol: "macwindow") { onOpen() }
                 Spacer(minLength: 0)
             }
         }

@@ -27,8 +27,17 @@ enum HelperClient {
         guard connected == 0 else { return nil }
 
         let line = HelperCoding.line(request)
-        let written = line.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
-        guard written == line.count else { return nil }
+        let sent = line.withUnsafeBytes { buffer -> Int in
+            guard let base = buffer.baseAddress else { return 0 }
+            var sent = 0
+            while sent < buffer.count {
+                let written = write(fd, base + sent, buffer.count - sent)
+                if written <= 0 { break }
+                sent += written
+            }
+            return sent
+        }
+        guard sent == line.count else { return nil }
 
         var data = Data()
         var byte: UInt8 = 0
@@ -73,12 +82,12 @@ enum HelperInstaller {
 
     /// 装或更新。一次管理员密码。
     static func install(version: String) -> Shell.AdminResult {
-        guard let binary = bundledBinary else { return .failed("这份软件里没有放电帮手。请用安装包或磁盘映像里的版本。") }
+        guard let binary = bundledBinary else { return .failed(T("这份软件里没有放电帮手。请用安装包或磁盘映像里的版本。")) }
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent("mbc-helper-\(UUID().uuidString).plist")
         do {
             try plist(version: version, uid: getuid()).write(to: temp, atomically: true, encoding: .utf8)
         } catch {
-            return .failed("写不了临时文件：\(error.localizedDescription)")
+            return .failed(T("写不了临时文件：%@", ["\(error.localizedDescription)"]))
         }
         defer { try? FileManager.default.removeItem(at: temp) }
         let label = HelperInfo.label
@@ -95,7 +104,7 @@ enum HelperInstaller {
             "/bin/chmod 644 \(Shell.quoted(HelperInfo.launchDaemonPlist))",
             "/bin/launchctl bootstrap system \(Shell.quoted(HelperInfo.launchDaemonPlist))",
         ].joined(separator: "; ")
-        return Shell.runAsAdmin(script, prompt: "充电上限要装一个放电帮手，这样白天接着电源也能把电放到上限。只装这一次。")
+        return Shell.runAsAdmin(script, prompt: T("充电上限要装一个放电帮手，这样白天接着电源也能把电放到上限。只装这一次。"))
     }
 
     /// 卸载：先让帮手把电源接回来，再删。
@@ -107,8 +116,13 @@ enum HelperInstaller {
         ].joined(separator: "; ")
     }
 
+    /// 卸载前先把电源接回来。这一步必须确认成功：
+    /// 帮手如果被 SIGKILL，SMC 里「适配器断开」是持久状态，删掉帮手后就没人能把它接回去了，
+    /// 用户会一直以为没插电（直到下次装帮手或重启）。宁可让用户重启后再卸，也不留下这个状态。
     static func uninstall() -> Shell.AdminResult {
-        _ = HelperClient.send(HelperRequest(cmd: .reset))
-        return Shell.runAsAdmin(uninstallScript(), prompt: "充电上限要卸载放电帮手，并把电源接回来。")
+        if let status = HelperClient.send(HelperRequest(cmd: .reset)), status.adapterEnabled == false {
+            return .failed(T("帮手没有把电源接回来。请重启这台 Mac 之后再卸载。"))
+        }
+        return Shell.runAsAdmin(uninstallScript(), prompt: T("充电上限要卸载放电帮手，并把电源接回来。"))
     }
 }
