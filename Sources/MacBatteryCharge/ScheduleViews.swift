@@ -17,6 +17,11 @@ struct ScheduleEditor: View {
             Text(T("每一段时间里，电池停在你选的数字。没排到的时间充到 100%。"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            if !model.helperUsable {
+                Text(T("要让电池放到上限，先装放电帮手：设置 → 高级。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             ForEach($model.settings.intervals) { binding in
                 IntervalRow(item: binding, dischargeAvailable: model.helperUsable) {
                     model.removeInterval(binding.wrappedValue.id)
@@ -54,6 +59,7 @@ struct IntervalRow: View {
                     .datePickerStyle(.compact)
                     .fixedSize()
                     .environment(\.locale, ClockPicker.locale)
+                    .accessibilityLabel(T("开始时间"))
                 Text("–")
                     .foregroundStyle(.secondary)
                 DatePicker("", selection: ClockPicker.binding($item.end), displayedComponents: .hourAndMinute)
@@ -61,6 +67,7 @@ struct IntervalRow: View {
                     .datePickerStyle(.compact)
                     .fixedSize()
                     .environment(\.locale, ClockPicker.locale)
+                    .accessibilityLabel(T("结束时间"))
                 Picker("", selection: $item.limit) {
                     ForEach(Schedule.allowedLimits, id: \.self) { value in
                         Text("\(value)%").tag(value)

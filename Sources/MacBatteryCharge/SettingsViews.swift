@@ -8,8 +8,6 @@ struct SettingsView: View {
     /// 点「完成」：弹窗里换回主页。
     var onClose: () -> Void
 
-    private static let issuesURL = URL(string: "https://github.com/1837620622/MacFullBar/issues")!
-
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -20,6 +18,11 @@ struct SettingsView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding(16)
+            if let message = model.message {
+                MessageLine(message: message) { model.dismissMessage() }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
             Form {
                 Section(T("通用")) {
                     Picker(T("语言"), selection: $model.settings.language) {
@@ -74,14 +77,26 @@ struct SettingsView: View {
 
                 Section(T("关于")) {
                     LabeledContent(T("版本"), value: Installation.version)
-                    Toggle(T("自动检查，并在后台下好新版本"), isOn: $model.settings.autoCheckUpdates)
+                    Toggle(T("自动检查新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
-                    Button(T("反馈问题")) { NSWorkspace.shared.open(Self.issuesURL) }
+                    Button(T("反馈问题")) { model.sendFeedback() }
+                    Button(T("再看引导")) { model.replayGuide(); onClose() }
                     Button(T("打开数据文件夹")) { model.openDataFolder() }
                     Link(T("项目主页"), destination: AppInfo.homepage)
                     Text(T("作者 %@", ["\(AppInfo.author)"]))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Text(Support.personalIntro)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Link(T("支持这个项目"), destination: Support.personalPage)
+                    Link(T("企业合作"), destination: Support.enterprisePage)
+                } header: {
+                    Text(T("赞助"))
                 }
             }
             .formStyle(.grouped)
@@ -125,34 +140,34 @@ struct SettingsView: View {
             Text(T("已经是最新版。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .downloading(let release):
-            Text(T("正在下载新版本 %@", ["\(release.version)"]))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .ready(let release, _):
+        case .available(let release):
             VStack(alignment: .leading, spacing: 6) {
-                Text(T("新版本 %@ 已经下好，到窗口里点「立即安装」。", ["\(release.version)"]))
+                Text(T("发现新版本 %@", ["\(release.version)"]))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button(T("去下载页面")) { model.openDownloadPage(release) }
-                    .controlSize(.small)
+                HStack(spacing: 8) {
+                    Button(T("下载新版本")) { model.openDownload(release) }
+                    Button(T("以后再说")) { model.dismissUpdate(release) }
+                }
+                .controlSize(.small)
             }
-        case .installing(let release):
-            Text(T("正在安装 %@", ["\(release.version)"]))
+        case .relaunching(let version):
+            Text(T("新版本 %@ 已经装好，正在重新打开。", ["\(version)"]))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .failed(let text, let release):
+        case .failed(let text):
             VStack(alignment: .leading, spacing: 6) {
                 Text(text)
                     .font(.caption)
                     .foregroundStyle(.orange)
-                if let release {
-                    Button(T("去下载页面")) { model.openDownloadPage(release) }
-                        .controlSize(.small)
+                HStack(spacing: 8) {
+                    Button(T("再试一次")) { model.checkForUpdates(userInitiated: true) }
+                    Button(T("去下载页面")) { model.openDownloadPage() }
                 }
+                .controlSize(.small)
             }
         }
-        Button(T("检查更新")) { model.checkForUpdates(userInitiated: true) }
+        Button(T("立即检查")) { model.checkForUpdates(userInitiated: true) }
             .disabled(model.update == .checking)
     }
 }

@@ -1,45 +1,29 @@
 import SwiftUI
 import BatteryCore
 
-/// 有新版本时放在主窗口最上面。下载、等你安装、正在装、没装成，都在这一块说清楚，只给一两个按钮。
+/// 有新版本时放在主窗口最上面：提示你，由你点「下载新版本」自己装。装上以后，旧版本会自己重新打开。
 struct UpdateBanner: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
         switch model.update {
-        case .downloading(let release):
-            card(title: T("正在下载新版本 %@", ["\(release.version)"]),
-                 detail: T("在后台下载，下完会在这里提示你。"),
+        case .available(let release):
+            card(title: T("发现新版本 %@", ["\(release.version)"]),
+                 detail: T("下载和安装都由你来：点「下载新版本」，在浏览器里下对应芯片的安装包，打开它就能装。装完旧版本会自己重新打开，设置和数据都保留。"),
                  symbol: "arrow.down.circle.fill", tint: .accentColor) {
-                Button(T("去下载页面")) { model.openDownloadPage(release) }
-                    .controlSize(.small)
-            }
-        case .ready(let release, _):
-            card(title: T("新版本 %@ 已经下好", ["\(release.version)"]),
-                 detail: T("点「立即安装」就装上。要输入一次管理员密码；设置和数据都保留，装完会自己重新打开。"),
-                 symbol: "checkmark.circle.fill", tint: .green) {
                 HStack(spacing: 10) {
-                    Button(T("立即安装")) { model.installUpdate() }
+                    Button(T("下载新版本")) { model.openDownload(release) }
                         .buttonStyle(.borderedProminent)
-                    Button(T("跳过这个版本")) { model.skip(release) }
+                        .controlSize(.small)
+                    Button(T("以后再说")) { model.dismissUpdate(release) }
                         .controlSize(.small)
                 }
             }
-        case .installing(let release):
-            card(title: T("正在安装 %@", ["\(release.version)"]),
-                 detail: T("在弹出的窗口里输入管理员密码。装完会自己重新打开。"),
-                 symbol: "gearshape.2.fill", tint: .accentColor) {
+        case .relaunching(let version):
+            card(title: T("新版本 %@ 已经装好", ["\(version)"]),
+                 detail: T("正在重新打开。"),
+                 symbol: "checkmark.circle.fill", tint: .green) {
                 EmptyView()
-            }
-        case .failed(let text, let release?):
-            card(title: T("没能自动更新到 %@", ["\(release.version)"]),
-                 detail: text,
-                 symbol: "exclamationmark.triangle.fill", tint: .orange) {
-                HStack(spacing: 10) {
-                    Button(T("去下载页面")) { model.openDownloadPage(release) }
-                        .buttonStyle(.borderedProminent)
-                    Button(T("再试一次")) { model.downloadUpdate(release) }
-                }
             }
         default:
             EmptyView()

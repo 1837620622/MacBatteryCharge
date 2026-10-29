@@ -3,28 +3,16 @@ import BatteryCore
 
 /// 和放电帮手说话。一问一答，每次连一下就断开，在后台队列里调用。
 enum HelperClient {
-    static func send(_ request: HelperRequest) -> HelperStatus? {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return nil }
+    /// 发一条指令，等一行回答。每一步都有时限：帮手卡住或者连不上，最多等 timeout 秒就放弃，
+    /// 绝不把调用的线程永远挂住（退出程序、刷新读数都会走到这里）。
+    static func send(_ request: HelperRequest, timeout: TimeInterval = 2) -> HelperStatus? {
+        guard let fd = openConnection(timeout: timeout) else { return nil }
         defer { close(fd) }
-        var timeout = timeval(tv_sec: 3, tv_usec: 0)
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         var noSigPipe: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
-
-        var address = sockaddr_un()
-        address.sun_family = sa_family_t(AF_UNIX)
-        let size = MemoryLayout.size(ofValue: address.sun_path)
-        withUnsafeMutablePointer(to: &address.sun_path) { pointer in
-            pointer.withMemoryRebound(to: CChar.self, capacity: size) { chars in
-                _ = HelperInfo.socketPath.withCString { strncpy(chars, $0, size - 1) }
-            }
-        }
-        let connected = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
-        }
-        guard connected == 0 else { return nil }
+        var limit = timeval(tv_sec: Int(timeout), tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
 
         let line = HelperCoding.line(request)
         let sent = line.withUnsafeBytes { buffer -> Int in
@@ -43,6 +31,37 @@ enum HelperClient {
         var byte: UInt8 = 0
         while data.count < 8192, read(fd, &byte, 1) == 1, byte != 0x0A { data.append(byte) }
         return HelperStatus.decode(data)
+    }
+
+    /// 连上帮手的套接字。非阻塞地连：帮手那边排队满了（EAGAIN）就短暂重试，到时限为止；没有帮手在听就立刻放弃。
+    /// 阻塞着连，排队满的时候会一直等，退出程序就会卡死。
+    private static func openConnection(timeout: TimeInterval) -> Int32? {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            guard fd >= 0 else { return nil }
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK)
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            let size = MemoryLayout.size(ofValue: address.sun_path)
+            withUnsafeMutablePointer(to: &address.sun_path) { pointer in
+                pointer.withMemoryRebound(to: CChar.self, capacity: size) { chars in
+                    _ = HelperInfo.socketPath.withCString { strncpy(chars, $0, size - 1) }
+                }
+            }
+            let result = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            }
+            if result == 0 {
+                _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK)
+                return fd
+            }
+            let code = errno
+            close(fd)
+            guard code == EAGAIN || code == EINPROGRESS || code == EINTR else { return nil }
+            usleep(20_000)
+        } while Date() < deadline
+        return nil
     }
 
     static func status() -> HelperStatus? { send(HelperRequest(cmd: .status)) }
@@ -93,6 +112,7 @@ enum HelperInstaller {
         let label = HelperInfo.label
         let script = [
             "set -e",
+            "/usr/bin/codesign --verify --strict \(Shell.quoted(binary.path))",
             "/bin/mkdir -p /Library/PrivilegedHelperTools",
             "/bin/launchctl bootout system/\(label) 2>/dev/null || true",
             "/bin/cp \(Shell.quoted(binary.path)) \(Shell.quoted(HelperInfo.installedBinary))",

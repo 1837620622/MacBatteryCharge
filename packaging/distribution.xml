@@ -5,7 +5,8 @@
     <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="__ARCH__"/>
     <welcome file="Welcome.html" mime-type="text/html"/>
     <conclusion file="Conclusion.html" mime-type="text/html"/>
-    <background file="background.png" mime-type="image/png" alignment="topleft" scaling="none"/>
+    <!-- 左下角：步骤列表在左边的上半部分，图放在下面，不压住它。 -->
+    <background file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
     <choices-outline>
         <line choice="default"/>
     </choices-outline>

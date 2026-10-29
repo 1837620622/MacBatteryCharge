@@ -144,14 +144,18 @@ enum Installation {
         }
     }
 
-    /// 等这个进程退出后再打开另一份，避免同一个 bundle id 只激活旧进程。
-    @MainActor
-    static func relaunch(_ url: URL) {
+    /// 旧进程退出以后再打开新版本，避免同一个 bundle id 只激活旧进程。窗口没开时（后台更新）带 --background，不弹窗口。
+    static func relaunchAfterExit(background: Bool) {
+        let script = """
+        i=0
+        while /bin/kill -0 "$0" 2>/dev/null && [ "$i" -lt 150 ]; do /bin/sleep 0.1; i=$((i + 1)); done
+        /bin/kill -0 "$0" 2>/dev/null && /bin/kill -9 "$0"
+        if [ "$2" = background ]; then /usr/bin/open "$1" --args --background; else /usr/bin/open "$1"; fi
+        """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", url.path]
+        process.arguments = ["-c", script, "\(ProcessInfo.processInfo.processIdentifier)", applicationsURL.path, background ? "background" : "window"]
         try? process.run()
-        NSApp.terminate(nil)
     }
 
     /// 关掉登录项，删掉配置，把程序移到废纸篓。充电上限和低电量保持现在的值。

@@ -233,6 +233,20 @@ final class AdviceTests: XCTestCase {
         XCTAssertFalse(live.contains("只停充"))
     }
 
+    /// 温度的说法要和过热保护是同一个门槛：超过 35°C 不能一边写「正常」，一边又停在 80%。
+    func testTemperatureWordingFollowsHeatProtection() {
+        var battery = BatterySnapshot()
+        battery.present = true
+        battery.externalConnected = true
+        battery.temperatureRaw = 3600
+        let hot = Advice.items(battery: battery, memory: MemorySnapshot(), limit: 80, heatActive: false).map(\.text).joined()
+        XCTAssertTrue(hot.contains("偏高"), "36°C 已经到过热保护的门槛")
+        XCTAssertFalse(hot.contains("正常"))
+        let guarded = Advice.items(battery: battery, memory: MemorySnapshot(), limit: 80, heatActive: true).map(\.text).joined()
+        XCTAssertTrue(guarded.contains("先停在 80%"), "过热保护时有一句话说清楚")
+        XCTAssertFalse(guarded.contains("正常"), "保护中不再说正常")
+    }
+
     func testWeakCharger() {
         var battery = BatterySnapshot()
         battery.present = true

@@ -27,11 +27,18 @@ struct RootView: View {
                     GuideView(model: model)
                 }
             } else if page == .settings {
-                SettingsView(model: model) { page = .main }
+                SettingsView(model: model) { switchPage(.main) }
+                    .transition(.opacity)
             } else {
                 mainPage
+                    .transition(.opacity)
             }
         }
+    }
+
+    /// 主页和设置之间淡入淡出，不硬切。
+    private func switchPage(_ next: Page) {
+        withAnimation(.easeInOut(duration: 0.2)) { page = next }
     }
 
     private var mainPage: some View {
@@ -41,37 +48,40 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if let message = model.message {
                         MessageLine(message: message) { model.dismissMessage() }
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                    // 时间表有错要改好才会消失，所以这一行没有「关掉」。
                     if let error = model.scheduleError {
-                        MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
+                        MessageLine(message: AppModel.Message(tone: .error, text: error.message))
                     }
                     UpdateBanner(model: model)
                     tonightCard
-                    Picker(T("模式"), selection: modeBinding) {
-                        ForEach(ChargeMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    curve
+                    ChoiceBar(options: ChargeMode.allCases, title: { $0.title }, selection: modeBinding)
                     Text(model.settings.mode.tagline)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     modePanel
-                    footer
+                    // 一直充满本来就是 100%，临时充满没有用，也就不放这一行。
+                    if model.settings.mode != .full {
+                        footer
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 18)
+                .animation(.easeInOut(duration: 0.25), value: model.message)
             }
+            .scrollIndicators(.hidden)
         }
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .top, spacing: 16) {
             ZStack {
                 LiquidDisc(level: Double(model.battery.percent ?? 0) / 100, limit: model.decision.limit,
                            tint: ringColor, flow: model.displayFlow, live: model.liveMotion)
                     .frame(width: 96, height: 96)
+                    .animation(.easeInOut(duration: 0.8), value: model.battery.percent)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1))
                 Text(percentText)
@@ -95,10 +105,11 @@ struct RootView: View {
             }
             Spacer(minLength: 0)
             Button {
-                page = .settings
+                switchPage(.settings)
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15, weight: .medium))
+                    .padding(.top, 2)
             }
             .buttonStyle(.plain)
             .help(T("设置"))
@@ -109,6 +120,14 @@ struct RootView: View {
     }
 
     /// 今晚的计划放在最上面：这是人最想知道的一句话，不用在别处找。
+    /// 电量曲线：过去 16 小时和之后 8 小时的预测。还没有读数时不占地方。
+    @ViewBuilder private var curve: some View {
+        let samples = model.history.samples(since: Date().addingTimeInterval(-TimeInterval(ChargeCurve.pastMinutes * 60)))
+        if !samples.isEmpty {
+            ChargeCurve(samples: samples, forecast: model.forecast, now: Date())
+        }
+    }
+
     @ViewBuilder private var tonightCard: some View {
         if let tonight = model.tonight {
             let tint = tonightTint(tonight.tone)
@@ -141,14 +160,18 @@ struct RootView: View {
     }
 
     @ViewBuilder private var modePanel: some View {
-        switch model.settings.mode {
-        case .smart:
-            SmartPanel(model: model)
-        case .fixed:
-            FixedPanel(model: model)
-        case .full:
-            FullPanel()
+        Group {
+            switch model.settings.mode {
+            case .smart:
+                SmartPanel(model: model)
+            case .fixed:
+                FixedPanel(model: model)
+            case .full:
+                FullPanel()
+            }
         }
+        .id(model.settings.mode)
+        .transition(.opacity)
     }
 
     /// 临时充满旁边那句话：固定模式说「这一段」，智能说「拔掉电源」。
@@ -175,7 +198,9 @@ struct RootView: View {
     }
 
     private var modeBinding: Binding<ChargeMode> {
-        Binding(get: { model.settings.mode }, set: { model.settings.mode = $0 })
+        Binding(get: { model.settings.mode }, set: { mode in
+            withAnimation(.easeInOut(duration: 0.25)) { model.settings.mode = mode }
+        })
     }
 
     private var percentText: String {
@@ -199,7 +224,8 @@ struct RootView: View {
 /// 一行提示：出错、写上限失败、时间表有问题都从这里说。
 struct MessageLine: View {
     var message: AppModel.Message
-    var dismiss: () -> Void
+    /// 有「关掉」动作才显示 ×。
+    var dismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -209,13 +235,15 @@ struct MessageLine: View {
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            if let dismiss {
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(T("关掉这条提示"))
             }
-            .buttonStyle(.plain)
-            .help(T("关掉这条提示"))
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint.opacity(0.12)))

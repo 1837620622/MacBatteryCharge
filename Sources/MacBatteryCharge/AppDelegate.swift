@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var island: NotchIsland?
     private var settingsSink: AnyCancellable?
     private var lastIconKey = ""
+    /// `--selftest-menubar 报告路径`：CI 用。有这个就不自动开窗口，改成模拟点击菜单栏图标，把结果写进报告后退出。
+    var selfTestReport: URL?
+    private var selfTestLines: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let background = LaunchContext.isBackgroundLaunch()
@@ -50,10 +53,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             .sink { [weak island] _ in Task { @MainActor in island?.configure() } }
         model.start()
 
-        LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
+        let launchedByAgent = CommandLine.arguments.contains("--background")
+        Task.detached(priority: .utility) { LoginItem.removeLegacyAgent(launchedByAgent: launchedByAgent) }
         model.syncLogin()
 
-        if !background { showPopover() }
+        if selfTestReport != nil {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.runMenuBarSelfTest()
+            }
+        } else if !background {
+            showPopover()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -61,9 +72,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return true
     }
 
+    /// 退出前要把电源接回来。这一步交给帮手，不在主线程上等：帮手卡住时，界面不能跟着卡死，
+    /// 最多等 1.5 秒就照样退出，帮手的租约到期会自己接回电源。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.needsHelperRelease else { return .terminateNow }
+        let once = ReplyOnce()
+        Task { @MainActor in
+            await model.releaseHelperForQuit()
+            once.run { NSApp.reply(toApplicationShouldTerminate: true) }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1500))
+            once.run { NSApp.reply(toApplicationShouldTerminate: true) }
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model.saveNow()
-        model.releaseHelper()
         Log.endSession()
     }
 
@@ -126,11 +152,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         apply.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: T("关于充电上限"), action: #selector(showAbout), keyEquivalent: "").target = self
-        menu.addItem(withTitle: T("退出充电上限"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: T("退出充电上限"), action: #selector(quitApp), keyEquivalent: "q").target = self
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
     @objc private func openFromMenu() { showPopover() }
+    @objc private func quitApp() { NSApp.terminate(nil) }
     @objc private func toggleTopUp() { model.toggleTopUp() }
     @objc private func applyFromMenu() { model.applyNow() }
 
@@ -226,6 +253,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.editingID = nil
     }
 
+    // MARK: 自检
+
+    /// 模拟用户点两次菜单栏图标，看弹窗开了、又收起来了。只给 CI 用。
+    private func runMenuBarSelfTest() {
+        let button = statusItem?.button
+        selfTestLines.append("状态栏图标在屏幕上：\(button?.window != nil ? "通过" : "失败")")
+        button?.performClick(nil)
+        selfTestLines.append("第一次点击后弹窗打开：\(popover?.isShown == true ? "通过" : "失败")")
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            self?.finishMenuBarSelfTest()
+        }
+    }
+
+    private func finishMenuBarSelfTest() {
+        let visible = popover?.contentViewController?.view.window?.isVisible == true
+        selfTestLines.append("弹窗窗口可见：\(visible ? "通过" : "失败")")
+        statusItem?.button?.performClick(nil)
+        selfTestLines.append("第二次点击后弹窗收起：\(popover?.isShown == true ? "失败" : "通过")")
+        let passed = !selfTestLines.contains { $0.hasSuffix("失败") }
+        selfTestLines.append(passed ? "结果：通过" : "结果：失败")
+        if let report = selfTestReport {
+            try? (selfTestLines.joined(separator: "\n") + "\n").write(to: report, atomically: true, encoding: .utf8)
+        }
+        NSApp.terminate(nil)
+    }
+
     // MARK: 电源变化
 
     private func watchPower() {
@@ -247,6 +301,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.model.refresh() }
         })
+    }
+}
+
+/// 退出请求只回答一次：帮手先回来、或者限时到了，两边都会来回答，只认先到的那个。
+@MainActor
+final class ReplyOnce {
+    private var done = false
+
+    func run(_ reply: () -> Void) {
+        guard !done else { return }
+        done = true
+        reply()
     }
 }
 

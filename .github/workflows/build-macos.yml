@@ -53,6 +53,20 @@ jobs:
           "$app/Contents/MacOS/MacBatteryCharge" --snapshot "$PWD/snapshots"
           ls -l snapshots
 
+      # 自检：在真机器上走真实的代码路径，结果写进 snapshots 产物里。失败只标红，不挡住打包。
+      - name: Self-test menu bar click
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p snapshots
+          app="build/$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          "$app" --selftest-menubar "$PWD/snapshots/selftest-menubar.txt" &
+          pid=$!
+          for _ in $(seq 1 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "菜单栏自检超过 60 秒，没有结束"; fi
+          wait "$pid" || true
+          cat snapshots/selftest-menubar.txt || echo "没有生成菜单栏自检报告"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

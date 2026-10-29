@@ -14,13 +14,7 @@ struct SmartPanel: View {
                 Text(T("平时停在这里，不一直满电。电池更耐用。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Picker(T("平时停在多少"), selection: dailyCapBinding) {
-                    ForEach(SmartPolicy.dailyCapChoices, id: \.self) { value in
-                        Text("\(value)%").tag(value)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                ChoiceBar(options: SmartPolicy.dailyCapChoices, title: { "\($0)%" }, selection: dailyCapBinding)
             }
 
             Card {
@@ -29,17 +23,12 @@ struct SmartPanel: View {
                 Text(T("在你平时拔电源之前，把电补到这个量。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Picker(T("拔电源时充到"), selection: $model.settings.unplugTarget) {
-                    ForEach(ChargePlanner.targetChoices, id: \.self) { value in
-                        Text("\(value)%").tag(value)
-                    }
-                }
-                .pickerStyle(.segmented)
+                ChoiceBar(options: ChargePlanner.targetChoices, title: { "\($0)%" }, selection: $model.settings.unplugTarget)
                 habitLine
                 DisclosureGroup(isExpanded: $showDetails) {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle(T("记住我的充电习惯"), isOn: $model.settings.learnHabits)
-                        Text(T("每天第一次长时间接着电源后拔掉，就记作一次。记满 %@ 次，就按平时的时间来。", ["\(HabitJournal.minLearnCount)"]))
+                        Text(T("每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。", ["\(HabitJournal.minLearnCount)"]))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Toggle(T("还没学会时，先按一个固定时间"), isOn: $model.settings.deadlineEnabled)
@@ -102,12 +91,10 @@ struct FixedPanel: View {
                         .datePickerStyle(.compact)
                         .fixedSize()
                         .environment(\.locale, ClockPicker.locale)
-                    Picker(T("充到"), selection: $model.settings.unplugTarget) {
-                        ForEach(ChargePlanner.targetChoices, id: \.self) { value in
-                            Text("\(value)%").tag(value)
-                        }
+                    HStack(spacing: 10) {
+                        Text(T("充到"))
+                        ChoiceBar(options: ChargePlanner.targetChoices, title: { "\($0)%" }, selection: $model.settings.unplugTarget)
                     }
-                    .pickerStyle(.segmented)
                 }
             }
         }
