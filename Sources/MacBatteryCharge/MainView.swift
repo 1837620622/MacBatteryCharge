@@ -46,7 +46,7 @@ struct RootView: View {
 
     /// 主页和设置之间淡入淡出，不硬切。
     private func switchPage(_ next: Page) {
-        withAnimation(.easeInOut(duration: 0.2)) { page = next }
+        withAnimation(Motion.quick) { page = next }
     }
 
     private var mainPage: some View {
@@ -77,7 +77,8 @@ struct RootView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 18)
-                .animation(.easeInOut(duration: 0.25), value: model.message)
+                .animation(Motion.standard, value: model.message)
+                .animation(Motion.standard, value: model.tonight)
                 .background(GeometryReader { proxy in
                     Color.clear.preference(key: PageHeightKey.self, value: proxy.size.height)
                 })
@@ -113,6 +114,7 @@ struct RootView: View {
                 Text(percentText)
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .numericTextTransition()
                     .shadow(color: .black.opacity(0.25), radius: 2)
             }
             .accessibilityElement(children: .ignore)
@@ -120,6 +122,7 @@ struct RootView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.statusTitle)
                     .font(.title3.weight(.semibold))
+                    .contentTransition(.opacity)
                 Text(model.statusDetail)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -177,6 +180,7 @@ struct RootView: View {
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.1)))
             .accessibilityElement(children: .combine)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -228,7 +232,7 @@ struct RootView: View {
 
     private var modeBinding: Binding<ChargeMode> {
         Binding(get: { model.settings.mode }, set: { mode in
-            withAnimation(.easeInOut(duration: 0.25)) { model.settings.mode = mode }
+            withAnimation(Motion.standard) { model.settings.mode = mode }
         })
     }
 

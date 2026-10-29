@@ -81,6 +81,12 @@ struct PreviewWallpaper: View {
     }
 }
 
+/// 动画的时长统一放在这里，免得各处各写一个数。快的用于选中和切换，标准的用于内容出现和消失。
+enum Motion {
+    static let quick = Animation.easeInOut(duration: 0.2)
+    static let standard = Animation.easeInOut(duration: 0.3)
+}
+
 extension View {
     /// 数字变化时滚动过去（macOS 14 起）。更早的系统直接换掉，不影响读数。
     @ViewBuilder
