@@ -191,16 +191,7 @@ static BOOL MBCScreenHasNotch(void) {
 - (void)buildStatusItem {
     self.status = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
     self.status.autosaveName = @"com.macbatterycharge.status";
-    NSImage *image = [NSImage imageWithSize:NSMakeSize(16, 16) flipped:NO drawingHandler:^BOOL(NSRect rect) {
-        [[NSColor blackColor] set];
-        [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(1, 3, 12, 9) xRadius:1.4 yRadius:1.4] stroke];
-        [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(4.5, 12.2, 5, 1.8) xRadius:0.5 yRadius:0.5] fill];
-        [[NSBezierPath bezierPathWithRect:NSMakeRect(3, 5, 6, 5)] fill];
-        return YES;
-    }];
-    image.template = YES;
-    self.status.button.image = image;
-    self.status.button.imagePosition = NSImageLeft;
+    self.status.button.imagePosition = NSImageOnly;
     self.status.button.target = self;
     self.status.button.action = @selector(statusClicked:);
     self.status.button.toolTip = MBCScreenHasNotch()
@@ -209,23 +200,32 @@ static BOOL MBCScreenHasNotch(void) {
     [self setMenuBarTop:@"--" bottom:@"读取"];
 }
 
+// 菜单栏按钮不保证换行。把电池图标和两行字画进同一张模板图，上排才真的在上边。
 - (void)setMenuBarTop:(NSString *)top bottom:(NSString *)bottom {
-    NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
-    style.alignment = NSTextAlignmentLeft;
-    style.maximumLineHeight = 9;
-    style.lineSpacing = -1;
+    NSString *line1 = top.length ? top : @"--";
+    NSString *line2 = bottom.length ? bottom : @"";
     NSDictionary *topAttr = @{
-        NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:9 weight:NSFontWeightSemibold],
-        NSParagraphStyleAttributeName: style,
+        NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:8 weight:NSFontWeightSemibold],
+        NSForegroundColorAttributeName: [NSColor blackColor],
     };
     NSDictionary *bottomAttr = @{
         NSFontAttributeName: [NSFont systemFontOfSize:8 weight:NSFontWeightRegular],
-        NSParagraphStyleAttributeName: style,
+        NSForegroundColorAttributeName: [NSColor blackColor],
     };
-    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] init];
-    [text appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@\n", top ?: @"--"] attributes:topAttr]];
-    [text appendAttributedString:[[NSAttributedString alloc] initWithString:bottom ?: @"" attributes:bottomAttr]];
-    self.status.button.attributedTitle = text;
+    CGFloat textWidth = MAX([line1 sizeWithAttributes:topAttr].width, [line2 sizeWithAttributes:bottomAttr].width);
+    CGFloat width = ceil(20 + textWidth);
+    NSImage *image = [NSImage imageWithSize:NSMakeSize(width, 18) flipped:NO drawingHandler:^BOOL(NSRect rect) {
+        [[NSColor blackColor] set];
+        [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(1, 4, 12, 9) xRadius:1.4 yRadius:1.4] stroke];
+        [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(4.5, 13, 5, 1.8) xRadius:0.5 yRadius:0.5] fill];
+        [[NSBezierPath bezierPathWithRect:NSMakeRect(3, 6, 6, 5)] fill];
+        [line1 drawAtPoint:NSMakePoint(18, 8) withAttributes:topAttr];
+        [line2 drawAtPoint:NSMakePoint(18, 0) withAttributes:bottomAttr];
+        return YES;
+    }];
+    image.template = YES;
+    self.status.button.image = image;
+    self.status.button.title = @"";
 }
 
 - (void)buildWindow {
@@ -492,7 +492,34 @@ static BOOL MBCScreenHasNotch(void) {
 }
 
 - (void)addRow:(id)sender {
-    [self.rows addObject:[@{@"start": @"12:00", @"end": @"13:00", @"limit": @90, @"lowPower": @"off"} mutableCopy]];
+    int coverage[1440];
+    NSString *error = nil;
+    if (!MBCCompileIntervals(self.rows, coverage, &error)) {
+        self.resultLabel.stringValue = error ?: @"先把现有时间段改正确，再添加";
+        NSBeep();
+        return;
+    }
+    int start = -1;
+    for (int minute = 0; minute < 1440; minute++) {
+        if (coverage[minute] < 0) {
+            start = minute;
+            break;
+        }
+    }
+    if (start < 0) {
+        self.resultLabel.stringValue = @"一天已经被排满。先把某一段改短，再添加。";
+        NSBeep();
+        return;
+    }
+    int end = start + 1;
+    while (end < 1440 && coverage[end] < 0 && end - start < 60) end++;
+    int endMinute = end >= 1440 ? 0 : end;
+    [self.rows addObject:[@{
+        @"start": [NSString stringWithFormat:@"%02d:%02d", start / 60, start % 60],
+        @"end": [NSString stringWithFormat:@"%02d:%02d", endMinute / 60, endMinute % 60],
+        @"limit": @90,
+        @"lowPower": @"off",
+    } mutableCopy]];
     [self.table reloadData];
     [self.table selectRowIndexes:[NSIndexSet indexSetWithIndex:self.rows.count - 1] byExtendingSelection:NO];
 }
@@ -505,6 +532,9 @@ static BOOL MBCScreenHasNotch(void) {
     }
     [self.rows removeObjectAtIndex:(NSUInteger)row];
     [self.table reloadData];
+    if (self.rows.count == 0) return;
+    NSInteger next = MIN(row, (NSInteger)self.rows.count - 1);
+    [self.table selectRowIndexes:[NSIndexSet indexSetWithIndex:(NSUInteger)next] byExtendingSelection:NO];
 }
 
 - (void)showClock:(id)sender {
@@ -566,17 +596,18 @@ static BOOL MBCScreenHasNotch(void) {
 - (void)refreshHardware {
     NSDictionary *battery = MBCReadBatteryReport();
     NSArray *lines = MBCBatteryDetailLines(battery);
-    self.chargeValue.stringValue = lines.count > 0 ? lines[0] : @"没有读到";
+    self.chargeValue.stringValue = @"—";
     self.flowValue.stringValue = MBCMenuBarBottom(battery);
     self.currentValue.stringValue = @"—";
     self.healthValue.stringValue = @"—";
     self.tempValue.stringValue = @"—";
     for (NSString *line in lines) {
-        if ([line hasPrefix:@"电流"]) self.currentValue.stringValue = line;
-        if ([line hasPrefix:@"健康"]) self.healthValue.stringValue = line;
-        if ([line hasPrefix:@"电池温度"]) self.tempValue.stringValue = line;
+        if ([line hasPrefix:@"电量 "]) self.chargeValue.stringValue = [line substringFromIndex:3];
+        if ([line hasPrefix:@"电流 "]) self.currentValue.stringValue = [line substringFromIndex:3];
+        if ([line hasPrefix:@"健康度约 "]) self.healthValue.stringValue = [line substringFromIndex:5];
+        if ([line hasPrefix:@"电池温度 "]) self.tempValue.stringValue = [line substringFromIndex:5];
         if ([line hasPrefix:@"没有读到内置电池"]) {
-            self.chargeValue.stringValue = line;
+            self.chargeValue.stringValue = @"没有内置电池";
             self.flowValue.stringValue = @"无电池";
         }
     }
@@ -590,8 +621,8 @@ static BOOL MBCScreenHasNotch(void) {
                                          MBCFormatBytes([memory[@"usedBytes"] unsignedLongLongValue]),
                                          MBCMemoryPressureName([memory[@"pressure"] integerValue])];
     }
-    self.adviceLabel.stringValue = [NSString stringWithFormat:@"%@%@", MBCBatteryAdvice(battery), MBCMemoryAdvice(memory, battery)];
-    [self setMenuBarTop:self.status.button.attributedTitle.length ? [self menuBarTopFromTarget] : @"--" bottom:MBCMenuBarBottom(battery)];
+    self.adviceLabel.stringValue = [@[MBCBatteryAdvice(battery), MBCMemoryAdvice(memory, battery)] componentsJoinedByString:@"\n"];
+    [self setMenuBarTop:[self menuBarTopFromTarget] bottom:MBCMenuBarBottom(battery)];
 }
 
 - (NSString *)menuBarTopFromTarget {
@@ -765,6 +796,7 @@ static BOOL MBCScreenHasNotch(void) {
 
 - (void)statusClicked:(id)sender {
     if (self.window.isVisible && self.window.isKeyWindow) {
+        [self.guide stopAnimation];
         [self.window orderOut:nil];
         return;
     }

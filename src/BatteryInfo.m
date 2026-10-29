@@ -1,13 +1,34 @@
 #import "BatteryInfo.h"
 #import "Command.h"
 
-static BOOL firstNumber(NSString *text, NSString *key, double *out) {
+// ioreg 顶层是 "Key" = 100，BatteryData 里面是 "Key"=2700。两种都要认。
+// 只匹配带引号的完整键，避免 ShutDownTemperature 被当成 Temperature。
+static BOOL indexAfterKey(NSString *text, NSString *key, NSUInteger *indexOut) {
     if (text.length == 0 || key.length == 0) return NO;
-    NSString *token = [NSString stringWithFormat:@"\"%@\" = ", key];
-    NSRange found = [text rangeOfString:token];
-    if (found.location == NSNotFound) return NO;
-    NSUInteger index = NSMaxRange(found);
-    if (index >= text.length) return NO;
+    NSString *token = [NSString stringWithFormat:@"\"%@\"", key];
+    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSRange search = NSMakeRange(0, text.length);
+    while (search.length > 0) {
+        NSRange found = [text rangeOfString:token options:0 range:search];
+        if (found.location == NSNotFound) return NO;
+        NSUInteger index = NSMaxRange(found);
+        while (index < text.length && [space characterIsMember:[text characterAtIndex:index]]) index++;
+        if (index < text.length && [text characterAtIndex:index] == '=') {
+            index++;
+            while (index < text.length && [space characterIsMember:[text characterAtIndex:index]]) index++;
+            if (indexOut) *indexOut = index;
+            return YES;
+        }
+        NSUInteger next = NSMaxRange(found);
+        if (next >= text.length) return NO;
+        search = NSMakeRange(next, text.length - next);
+    }
+    return NO;
+}
+
+static BOOL firstNumber(NSString *text, NSString *key, double *out) {
+    NSUInteger index = 0;
+    if (!indexAfterKey(text, key, &index) || index >= text.length) return NO;
     NSMutableString *digits = [NSMutableString string];
     if ([text characterAtIndex:index] == '-') {
         [digits appendString:@"-"];
@@ -24,6 +45,26 @@ static BOOL firstNumber(NSString *text, NSString *key, double *out) {
     if (!any) return NO;
     if (out) *out = digits.doubleValue;
     return YES;
+}
+
+static BOOL firstFlag(NSString *text, NSString *key, BOOL *out) {
+    NSUInteger index = 0;
+    if (!indexAfterKey(text, key, &index) || index >= text.length) return NO;
+    NSString *rest = [text substringFromIndex:index];
+    if ([rest hasPrefix:@"Yes"] || [rest hasPrefix:@"true"] || [rest hasPrefix:@"YES"]) {
+        if (out) *out = YES;
+        return YES;
+    }
+    if ([rest hasPrefix:@"No"] || [rest hasPrefix:@"false"] || [rest hasPrefix:@"NO"]) {
+        if (out) *out = NO;
+        return YES;
+    }
+    unichar ch = [rest characterAtIndex:0];
+    if (ch == '1' || ch == '0') {
+        if (out) *out = ch == '1';
+        return YES;
+    }
+    return NO;
 }
 
 static NSInteger roundedPercent(double part, double whole) {
@@ -46,10 +87,9 @@ NSDictionary *MBCParseBatteryReport(NSString *ioregText, NSString *thermText) {
     }
     if (firstNumber(ioregText, @"Temperature", &value)) report[@"decidegrees"] = @((NSInteger)value);
     if (firstNumber(ioregText, @"TimeChargingThermallyLimited", &value)) report[@"thermalLimited"] = @((NSInteger)value);
-    if ([ioregText containsString:@"\"IsCharging\" = Yes"]) report[@"charging"] = @YES;
-    else if ([ioregText containsString:@"\"IsCharging\" = No"]) report[@"charging"] = @NO;
-    if ([ioregText containsString:@"\"ExternalConnected\" = Yes"]) report[@"external"] = @YES;
-    else if ([ioregText containsString:@"\"ExternalConnected\" = No"]) report[@"external"] = @NO;
+    BOOL flag = NO;
+    if (firstFlag(ioregText, @"IsCharging", &flag)) report[@"charging"] = @(flag);
+    if (firstFlag(ioregText, @"ExternalConnected", &flag)) report[@"external"] = @(flag);
     NSInteger health = roundedPercent([report[@"nominalCapacity"] doubleValue], [report[@"designCapacity"] doubleValue]);
     if (health > 0) report[@"health"] = @(health);
     if ([thermText containsString:@"No thermal warning"]) report[@"thermalQuiet"] = @YES;

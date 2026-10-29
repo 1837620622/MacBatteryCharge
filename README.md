@@ -41,14 +41,16 @@ Mac 菜单栏里的电池软件。登录后藏在菜单栏，点图标打开一�
 
 | 芯片 | 安装包 | 磁盘映像 |
 |---|---|---|
-| Apple 芯片 | `MacBatteryCharge-2.1.0-arm64.pkg` | `MacBatteryCharge-2.1.0-arm64.dmg` |
-| Intel | `MacBatteryCharge-2.1.0-intel.pkg` | `MacBatteryCharge-2.1.0-intel.dmg` |
+| Apple 芯片 | `MacBatteryCharge-2.1.1-arm64.pkg` | `MacBatteryCharge-2.1.1-arm64.dmg` |
+| Intel | `MacBatteryCharge-2.1.1-intel.pkg` | `MacBatteryCharge-2.1.1-intel.dmg` |
 
 PKG 装到「应用程序」。DMG 打开后把软件拖进「应用程序」。从磁盘映像里直接打开不会登录自启。
 
 如果系统提示无法验证开发者，在访达里按住 Control 点软件，选「打开」。需要 macOS 11 或更新版本。
 
-装好后打开，看完引导，点「立即应用」。然后打开「系统设置 → 电池」，确认上限已经变成这一段该有的数字。
+装好后打开。充电上限会按当前时间段写上，不用等按钮。低电量仍要点「立即应用」，并且只有和系统现在不一样时才要管理员密码。然后打开「系统设置 → 电池」核对。
+
+关上窗口后软件还在菜单栏里。点「退出」后，这次登录不再改上限，下次登录再启动。
 
 充电上限需要 Apple 芯片，以及 macOS 26.4 或更新版本。其它 Mac 仍能看电池、内存、温度，也能设低电量和登录启动。窗口会写明不支持充电上限。台式机没有内置电池时也会直接写出来。
 

@@ -94,6 +94,16 @@ int main(void) {
         NSString *details = [MBCBatteryDetailLines(report) componentsJoinedByString:@"\n"];
         expect([details containsString:@"30.0"], @"温度显示成摄氏度");
         expect([MBCMenuBarBottom(report) isEqualToString:@"接通"], @"菜单栏下排是接通");
+
+        NSString *compact = @"\"CurrentCapacity\" = 100\n\"InstantAmperage\" = 0\n\"ExternalConnected\" = Yes\n"
+                            @"\"IsCharging\"=0 \"DesignCapacity\"=5103,\"NominalChargeCapacity\"=4229,"
+                            @"\"AppleRawMaxCapacity\"=4096,\"Temperature\"=3000,\"ShutDownTemperature\"=2982";
+        NSDictionary *packed = MBCParseBatteryReport(compact, @"No thermal warning");
+        expect([packed[@"decidegrees"] integerValue] == 3000, @"无空格的温度也要读到");
+        expect([packed[@"health"] integerValue] == 83, @"无空格的容量也能算健康度");
+        expect([packed[@"charging"] boolValue] == NO, @"IsCharging=0 不是在充电");
+        expect([MBCMenuBarBottom(packed) isEqualToString:@"接通"], @"充满且接通时下排是接通");
+        expect([[MBCBatteryDetailLines(packed) componentsJoinedByString:@"\n"] containsString:@"30.0"], @"紧凑文本也显示 30.0°C");
         expect([MBCMenuBarBottom(@{}) isEqualToString:@"无电池"], @"没有电池时下排写无电池");
         expect([MBCBatteryAdvice(@{}) containsString:@"没有读到内置电池"], @"台式机不要装成有电池");
 
