@@ -33,7 +33,7 @@ public struct LimitDecision: Equatable, Sendable {
 }
 
 public enum ChargePolicy {
-    /// 断电前充满和临时充满只会往上放；过热保护最后压到 80。都不会让电池去放电。
+    /// 断电前充满和临时充满只会往上放；过热保护最后压到 80。放电另由 shouldDischarge 决定。
     public static func decide(schedule: Schedule, minute: Int, topUp: Bool, deadlineLift: Int?, heat: Bool) -> LimitDecision {
         let scheduled = schedule.limit(at: minute)
         var decision = LimitDecision(limit: scheduled, reason: schedule.isGap(at: minute) ? .gap : .schedule, scheduled: scheduled)
@@ -50,6 +50,18 @@ public enum ChargePolicy {
             decision.reason = .heat
         }
         return decision
+    }
+
+    /// 放电最低到这里，帮手那边也守着同一个下限。
+    public static let dischargeFloor = 20
+
+    /// 这一段开着放电、接着电源、电量比上限高 2% 起开始放；放到上限就停。
+    /// 临时充满、断电前充满、过热保护、空档都不放电。external 要把「帮手已经断开电源」也算作接着电源。
+    public static func shouldDischarge(previous: Bool, percent: Int?, decision: LimitDecision,
+                                       enabled: Bool, external: Bool) -> Bool {
+        guard enabled, external, let percent, decision.reason == .schedule else { return false }
+        let target = max(decision.limit, dischargeFloor)
+        return previous ? percent > target : percent > target + 1
     }
 
     /// 40°C 起保护，降到 37°C 以下或拔掉电源才解除，中间保持上一次的状态，免得来回跳。

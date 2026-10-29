@@ -11,6 +11,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var deadline = ClockTime(hour: 23, minute: 30)
     public var heatProtection = true
     public var notifications = false
+    /// 刘海灵动岛：鼠标移到刘海、插拔电源时从刘海里展开。
+    public var notchIsland = true
+    public var notchOnPower = true
+    /// 充电或放电时在刘海两侧常驻一点小字。会盖住刘海旁边的菜单。
+    public var notchEars = false
+    /// 没有刘海的屏幕上，在菜单栏正中假装有一个。
+    public var notchWithoutNotch = false
     public var lastUpdateCheck: Date?
     public var skippedVersion: String?
 
@@ -21,6 +28,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case intervals, launchAtLogin, guideSeen, autoCheckUpdates, deadlineEnabled, deadline
         case heatProtection, notifications, lastUpdateCheck, skippedVersion
+        case notchIsland, notchOnPower, notchEars, notchWithoutNotch
         case lowPowerAuto
     }
 
@@ -28,11 +36,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     private struct StoredInterval: Decodable {
         var value: Interval?
         var hadLowPower = false
+        var hadDischarge = false
 
         init(from decoder: Decoder) throws {
             value = try? Interval(from: decoder)
             if let keyed = try? decoder.container(keyedBy: Interval.CodingKeys.self) {
                 hadLowPower = keyed.contains(.lowPower)
+                hadDischarge = keyed.contains(.discharge)
             }
         }
     }
@@ -41,10 +51,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let legacyAuto = (try? c.decodeIfPresent(Bool.self, forKey: .lowPowerAuto)) ?? false
         if c.contains(.intervals), let stored = try? c.decode([StoredInterval].self, forKey: .intervals) {
+            // 2.x 没有放电这一项。原来的初衷是白天停在 80% 左右，所以上限低于 100 的段默认打开放电。
+            let legacyDischarge = !stored.contains { $0.hadDischarge }
             // 用户删光了时间段就保持空的，不偷偷换回默认。
             intervals = stored.compactMap { item in
                 guard var value = item.value else { return nil }
                 if !item.hadLowPower && legacyAuto { value.lowPower = .battery }
+                if legacyDischarge && value.limit < 100 { value.discharge = true }
                 return value
             }
         } else {
@@ -60,6 +73,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         deadline = read(.deadline, ClockTime(hour: 23, minute: 30))
         heatProtection = read(.heatProtection, true)
         notifications = read(.notifications, false)
+        notchIsland = read(.notchIsland, true)
+        notchOnPower = read(.notchOnPower, true)
+        notchEars = read(.notchEars, false)
+        notchWithoutNotch = read(.notchWithoutNotch, false)
         lastUpdateCheck = (try? c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)) ?? nil
         skippedVersion = (try? c.decodeIfPresent(String.self, forKey: .skippedVersion)) ?? nil
     }
@@ -74,6 +91,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try c.encode(deadline, forKey: .deadline)
         try c.encode(heatProtection, forKey: .heatProtection)
         try c.encode(notifications, forKey: .notifications)
+        try c.encode(notchIsland, forKey: .notchIsland)
+        try c.encode(notchOnPower, forKey: .notchOnPower)
+        try c.encode(notchEars, forKey: .notchEars)
+        try c.encode(notchWithoutNotch, forKey: .notchWithoutNotch)
         try c.encodeIfPresent(lastUpdateCheck, forKey: .lastUpdateCheck)
         try c.encodeIfPresent(skippedVersion, forKey: .skippedVersion)
     }

@@ -317,7 +317,7 @@ private struct NotchFrame: View {
                     .offset(x: -20 + 120 * drag)
                     .opacity(holding ? 0.75 : 1)
                 // 刘海盖在最上面，图标在它后面时看不见。
-                UnevenRoundedRectangle(bottomLeadingRadius: 9, bottomTrailingRadius: 9, style: .continuous)
+                NotchShape(bottomRadius: 10)
                     .fill(Color.black)
                     .frame(width: 120, height: 30)
             }
@@ -389,7 +389,7 @@ private struct PasswordFrame: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
-            FrameCaption(text: "系统自己的密码框，只在「立即应用」时出现")
+            FrameCaption(text: "系统自己的密码框：装放电帮手、改低电量时才出现")
         }
     }
 }
@@ -437,7 +437,7 @@ private struct LimitFrame: View {
     }
 }
 
-/// 六：已经高于上限时停住，不往下放。
+/// 六：高于上限时放到上限就停。
 private struct HoldFrame: View {
     var phase: Double
 
@@ -448,6 +448,8 @@ private struct HoldFrame: View {
                 let width = geometry.size.width
                 let height = geometry.size.height
                 let y: (Double) -> CGFloat = { height * CGFloat(1 - ($0 - 60) / 40) }
+                // 92% 一路放到 80%，在 60% 的时间点停住。
+                let value: (Double) -> Double = { t in max(80, 92 - 12 * min(1, t / 0.6)) }
                 ZStack(alignment: .topLeading) {
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: y(80)))
@@ -459,22 +461,26 @@ private struct HoldFrame: View {
                         .foregroundStyle(.secondary)
                         .offset(x: 4, y: y(80) + 3)
                     Path { path in
-                        path.move(to: CGPoint(x: 0, y: y(92)))
-                        path.addLine(to: CGPoint(x: width * head, y: y(92)))
+                        path.move(to: CGPoint(x: 0, y: y(value(0))))
+                        var t = 0.0
+                        while t < head {
+                            t += 0.02
+                            path.addLine(to: CGPoint(x: width * min(t, head), y: y(value(min(t, head)))))
+                        }
                     }
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                     Circle()
                         .fill(Color.accentColor)
                         .frame(width: 9, height: 9)
-                        .offset(x: width * head - 4.5, y: y(92) - 4.5)
-                    Text("92%")
+                        .offset(x: width * head - 4.5, y: y(value(head)) - 4.5)
+                    Text("\(Int(value(head).rounded()))%")
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
-                        .offset(x: max(0, width * head - 34), y: y(92) - 22)
+                        .offset(x: max(0, width * head - 34), y: y(value(head)) - 22)
                 }
             }
             .frame(width: 270, height: 80)
-            FrameCaption(text: "80% 停住，不往下放")
+            FrameCaption(text: "放到 80% 停住，再由电源直接供电")
         }
     }
 }

@@ -23,6 +23,21 @@ jobs:
       - name: Test and package arm64 and Intel
         run: bash packaging/build.sh
 
+      - name: Idle CPU and memory
+        run: |
+          set -euo pipefail
+          app="build/arm64/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          [[ "$(uname -m)" == arm64 ]] || app="build/intel/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          "$app" --background &
+          pid=$!
+          sleep 45
+          kill -0 "$pid"
+          read -r cpu rss < <(ps -o %cpu=,rss= -p "$pid")
+          echo "空闲 45 秒：CPU ${cpu}%（含启动），内存 $((rss / 1024)) MB"
+          kill "$pid"
+          awk -v c="$cpu" 'BEGIN { exit (c > 4.0) }' || { echo "空闲 CPU 超过预算 4%"; exit 1; }
+          [[ $((rss / 1024)) -le 150 ]] || { echo "内存超过预算 150 MB"; exit 1; }
+
       - name: Snapshots
         continue-on-error: true
         run: |

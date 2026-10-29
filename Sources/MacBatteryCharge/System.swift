@@ -105,12 +105,16 @@ struct SystemReading: Sendable {
     var lowPower: LowPowerState?
     var thermal: ProcessInfo.ThermalState
     var date: Date
+    var helper: HelperStatus? = nil
 }
 
 enum SystemReaders {
-    static func read() -> SystemReading {
-        SystemReading(battery: battery(), memory: memory(), chargeLimit: ChargeBridge.read(),
-                      lowPower: lowPower(), thermal: ProcessInfo.processInfo.thermalState, date: Date())
+    /// lowPowerAge：pmset 要起一个进程，窗口没开时 10 分钟读一次就够。
+    static func read(lowPowerAge: TimeInterval = 0) -> SystemReading {
+        let helper = FileManager.default.fileExists(atPath: HelperInfo.socketPath) ? HelperClient.status() : nil
+        return SystemReading(battery: battery(), memory: memory(), chargeLimit: ChargeBridge.read(),
+                             lowPower: lowPower(maxAge: lowPowerAge), thermal: ProcessInfo.processInfo.thermalState,
+                             date: Date(), helper: helper)
     }
 
     static func battery() -> BatterySnapshot {
@@ -166,10 +170,17 @@ enum SystemReaders {
                               pressure: Int(pressure))
     }
 
-    static func lowPower() -> LowPowerState? {
+    private static let lowPowerLock = NSLock()
+    nonisolated(unsafe) private static var lowPowerCache: (value: LowPowerState?, at: Date)?
+
+    static func lowPower(maxAge: TimeInterval = 0) -> LowPowerState? {
+        lowPowerLock.lock()
+        defer { lowPowerLock.unlock() }
+        if maxAge > 0, let cache = lowPowerCache, Date().timeIntervalSince(cache.at) < maxAge { return cache.value }
         let result = Shell.run("/usr/bin/pmset", ["-g", "custom"])
-        guard result.status == 0 else { return nil }
-        return LowPowerState.parse(custom: result.out)
+        let value = result.status == 0 ? LowPowerState.parse(custom: result.out) : nil
+        lowPowerCache = (value, Date())
+        return value
     }
 
     static var isAppleSilicon: Bool {

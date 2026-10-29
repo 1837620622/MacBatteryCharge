@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import IOKit.ps
+import Combine
 import BatteryCore
 
 extension Notification.Name {
@@ -17,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var powerSource: CFRunLoopSource?
     private var observers: [NSObjectProtocol] = []
+    private var island: NotchIsland?
+    private var settingsSink: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let background = LaunchContext.isBackgroundLaunch()
@@ -31,6 +34,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         watchPower()
 
         model.onStatusChange = { [weak self] in self?.updateStatusItem() }
+        let island = NotchIsland(model: model)
+        self.island = island
+        model.onPlugChange = { [weak island] _ in island?.peek() }
+        island.configure()
+        settingsSink = model.$settings
+            .map { [$0.notchIsland, $0.notchOnPower, $0.notchEars, $0.notchWithoutNotch] }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak island] _ in DispatchQueue.main.async { island?.configure() } }
         model.start()
 
         LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
@@ -46,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model.saveNow()
+        model.releaseHelper()
     }
 
     @objc private func showFromOtherProcess(_ notification: Notification) {
@@ -122,8 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func showWindow() {
         let window = self.window ?? makeWindow()
         self.window = window
-        NSApp.activate()
+        if #available(macOS 14, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
         window.makeKeyAndOrderFront(nil)
+        model.windowVisible = true
         model.windowDidOpen()
     }
 
@@ -162,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        model.windowVisible = false
         model.saveNow()
         model.editingID = nil
     }
@@ -178,14 +193,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: .powerSourceChanged, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.refresh() }
+            Task { @MainActor in self?.model.refresh() }
         })
         observers.append(center.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.refresh() }
+            Task { @MainActor in self?.model.refresh() }
         })
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.refresh() }
+            Task { @MainActor in self?.model.refresh() }
         })
     }
 }

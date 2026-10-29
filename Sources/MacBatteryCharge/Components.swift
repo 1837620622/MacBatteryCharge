@@ -138,10 +138,9 @@ struct BatteryRing: View {
                         Text("%").font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
                     }
                 }
-                Image(systemName: flowSymbol)
+                PulsingSymbol(name: flowSymbol, active: flow == .charging && !reduceMotion)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(tint)
-                    .symbolEffect(.pulse, options: .repeating, isActive: flow == .charging && !reduceMotion)
             }
         }
         .frame(width: 100, height: 100)
@@ -241,5 +240,19 @@ struct TimelineBar: View {
             "\(ClockTime(minuteOfDay: block.start).text) 起 \(block.limit)%" + (block.index == nil ? "（空档）" : "")
         }
         return "时间表：" + parts.joined(separator: "，")
+    }
+}
+
+/// macOS 14 起充电时图标轻轻跳动，13 上保持静止。
+struct PulsingSymbol: View {
+    var name: String
+    var active: Bool
+
+    var body: some View {
+        if #available(macOS 14, *) {
+            Image(systemName: name).symbolEffect(.pulse, options: .repeating, isActive: active)
+        } else {
+            Image(systemName: name)
+        }
     }
 }

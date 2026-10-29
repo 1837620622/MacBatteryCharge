@@ -44,9 +44,17 @@ final class AppModel: ObservableObject {
     @Published private(set) var moving = false
     @Published var showGuide: Bool
     @Published var editingID: Interval.ID?
+    /// 放电帮手的最新状态。nil 表示没装或连不上。
+    @Published private(set) var helper: HelperStatus?
+    @Published private(set) var helperBusy = false
+    @Published private(set) var discharging = false
+    /// 窗口开着时 pmset 读得勤一点。
+    var windowVisible = false
 
     /// 菜单栏要跟着变。
     var onStatusChange: (() -> Void)?
+    /// 插上或拔掉电源时，刘海灵动岛弹一下。
+    var onPlugChange: ((Bool) -> Void)?
     let preview: Bool
 
     private var lastValidIntervals: [Interval]
@@ -61,6 +69,8 @@ final class AppModel: ObservableObject {
     private var lastHistorySave = Date.distantPast
     private var pollTask: Task<Void, Never>?
     private var lastProgress = -1.0
+    private var syncingHelper = false
+    private var lastSentLimit: Int?
 
     init(preview: Bool = false) {
         self.preview = preview
@@ -129,8 +139,9 @@ final class AppModel: ObservableObject {
             return
         }
         refreshing = true
+        let age: TimeInterval = windowVisible ? 20 : 600
         Task.detached(priority: .utility) {
-            let value = SystemReaders.read()
+            let value = SystemReaders.read(lowPowerAge: age)
             await self.receive(value)
         }
     }
@@ -145,24 +156,29 @@ final class AppModel: ObservableObject {
             ? ChargePolicy.heatActive(previous: heatActive, celsius: battery.celsius, external: battery.externalConnected)
             : false
 
+        // 帮手断开电源适配器放电时，系统会说“没接电源”，这里仍然算接着。
+        let external = battery.externalConnected || value.helper?.adapterEnabled == false
+        if wasExternal != external && reading != nil && lastFlow != nil { onPlugChange?(external) }
         // 临时充满和提前放开都在拔掉电源时结束。
-        if wasExternal && !battery.externalConnected {
+        if wasExternal && !external {
             topUpUntil = nil
             deadlineLift = nil
         }
-        wasExternal = battery.externalConnected
+        wasExternal = external
         if let until = topUpUntil, value.date >= until { topUpUntil = nil }
         if let lift = deadlineLift, value.date >= lift.until || !settings.deadlineEnabled { deadlineLift = nil }
 
-        if settings.deadlineEnabled, battery.externalConnected, deadlineLift == nil, let percent = battery.percent,
+        if settings.deadlineEnabled, external, deadlineLift == nil, let percent = battery.percent,
            let plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
                                          deadline: settings.deadline, rate: learnedRate), plan.liftNow {
             deadlineLift = (plan.target, value.date.addingTimeInterval(Double(plan.minutesToDeadline) * 60))
             notify("deadline", "提前放开到 \(plan.target)%", "按这台机器的充电速度，赶在 \(settings.deadline.text) 断电前充满。")
         }
 
+        helper = value.helper
         let previousHeat = decision.reason == .heat
         recompute()
+        updateDischarge()
         if decision.reason == .heat && !previousHeat {
             notify("heat", "电池偏热，先停在 80%", "降到 37°C 以下再按时间表继续。")
         }
@@ -175,6 +191,7 @@ final class AppModel: ObservableObject {
 
         record(value)
         autoApplyLimit()
+        syncHelper()
         onStatusChange?()
         if refreshAgain {
             refreshAgain = false
@@ -219,6 +236,108 @@ final class AppModel: ObservableObject {
             }
             refresh()
         }
+    }
+
+    // MARK: 放电帮手
+
+    var helperUsable: Bool { helper?.adapterControl == true && !helperOutdated }
+
+    var helperOutdated: Bool {
+        guard let helper else { return false }
+        return helper.protocolVersion != HelperInfo.protocolVersion || helper.version != Installation.version
+    }
+
+    var helperInstallable: Bool { HelperInstaller.bundledBinary != nil && SystemReaders.isAppleSilicon }
+
+    /// 这一段开着放电，但帮手没装好。
+    var dischargeWantedButMissing: Bool {
+        battery.present && schedule.discharge(at: minute) && !helperUsable
+    }
+
+    /// 系统没有原生充电上限时，上限交给帮手直接停充。
+    private var helperHandlesLimit: Bool {
+        guard let helper, !helperOutdated, helper.chargeControl == .direct else { return false }
+        return reading?.chargeLimit.isSupported != true
+    }
+
+    private func updateDischarge() {
+        let external = battery.externalConnected || helper?.adapterEnabled == false
+        discharging = ChargePolicy.shouldDischarge(
+            previous: discharging, percent: battery.percent, decision: decision,
+            enabled: helperUsable && schedule.discharge(at: minute), external: external)
+    }
+
+    /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效，每次刷新续一次；程序退出或崩了，电源自己接回来。
+    private func syncHelper() {
+        guard !preview, !syncingHelper, let current = helper, !helperOutdated else { return }
+        let wantedLimit = helperHandlesLimit ? decision.limit : nil
+        let wantedTarget = discharging ? decision.limit : nil
+        let same = current.limit == wantedLimit && current.dischargeTo == wantedTarget
+        if same && wantedTarget == nil { return }
+        syncingHelper = true
+        lastSentLimit = wantedLimit
+        Task {
+            let request = HelperRequest(cmd: .apply, limit: wantedLimit, dischargeTo: wantedTarget, lease: 120)
+            let status = await Task.detached { HelperClient.send(request) }.value
+            syncingHelper = false
+            if let status { helper = status }
+        }
+    }
+
+    func installHelper() {
+        guard !helperBusy, !preview else { return }
+        helperBusy = true
+        Task {
+            let result = await Task.detached { HelperInstaller.install(version: Installation.version) }.value
+            helperBusy = false
+            switch result {
+            case .ok:
+                message = Message(tone: .success, text: "放电帮手装好了。")
+            case .cancelled:
+                message = Message(tone: .info, text: "密码框取消了，放电帮手没有装。")
+            case .failed(let text):
+                message = Message(tone: .error, text: "放电帮手没有装好：\(text)")
+            }
+            refresh()
+        }
+    }
+
+    func removeHelper() {
+        guard !helperBusy, !preview else { return }
+        helperBusy = true
+        Task {
+            let result = await Task.detached { HelperInstaller.uninstall() }.value
+            helperBusy = false
+            discharging = false
+            helper = nil
+            switch result {
+            case .ok:
+                message = Message(tone: .success, text: "放电帮手已卸载，电源已接回。")
+            case .cancelled:
+                message = Message(tone: .info, text: "密码框取消了，放电帮手还在。")
+            case .failed(let text):
+                message = Message(tone: .error, text: "放电帮手没有卸载：\(text)")
+            }
+            refresh()
+        }
+    }
+
+    /// 程序退出时：电源接回来，充电上限不动。
+    func releaseHelper() {
+        guard helper != nil else { return }
+        _ = HelperClient.send(HelperRequest(cmd: .apply, limit: lastSentLimit, dischargeTo: nil))
+    }
+
+    // MARK: 预测
+
+    var forecast: [ForecastPoint] {
+        guard battery.present, let percent = battery.percent else { return [] }
+        return Forecast.points(
+            schedule: schedule, minute: minute, percent: percent,
+            external: battery.externalConnected || helper?.adapterEnabled == false,
+            deadline: settings.deadlineEnabled ? settings.deadline : nil, chargeRate: learnedRate,
+            dischargeAvailable: helperUsable, topUpMinutes: topUpUntil.map { max(0, Int($0.timeIntervalSinceNow / 60)) },
+            horizon: 480)
     }
 
     // MARK: 设置
@@ -541,8 +660,22 @@ final class AppModel: ObservableObject {
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         timer?.cancel()
+        timer = nil
         saveTask?.cancel()
         Task {
+            if HelperInstaller.isInstalled {
+                switch await Task.detached(operation: { HelperInstaller.uninstall() }).value {
+                case .ok: break
+                case .cancelled:
+                    message = Message(tone: .info, text: "放电帮手要先卸掉才能卸载，密码框取消了。")
+                    start()
+                    return
+                case .failed(let text):
+                    message = Message(tone: .error, text: "放电帮手没有卸载：\(text)")
+                    start()
+                    return
+                }
+            }
             let result = await Task.detached(operation: { Installation.uninstall() }).value
             switch result {
             case .success:
@@ -574,11 +707,12 @@ final class AppModel: ObservableObject {
     }
 
     var menuTop: String { battery.present ? "\(decision.limit)%" : "—" }
-    var menuBottom: String { battery.flow.menuWord }
+    var menuBottom: String { discharging ? "放电" : battery.flow.menuWord }
 
     var statusTitle: String {
         let battery = battery
         guard battery.present else { return "没有电池" }
+        if discharging { return "接着电源在放电" }
         switch battery.flow {
         case .charging: return "正在充电"
         case .discharging: return battery.externalConnected ? "接着电源也在放电" : "用电池"
@@ -592,6 +726,7 @@ final class AppModel: ObservableObject {
 
     var statusDetail: String {
         let battery = battery
+        if discharging { return "放到 \(decision.limit)% 就停，之后电源直接供电。" }
         var parts: [String] = []
         if let minutes = battery.minutesToFull, battery.flow == .charging {
             parts.append("约 \(Self.duration(minutes)) 充满")
@@ -609,6 +744,7 @@ final class AppModel: ObservableObject {
         var text = "上限 \(decision.limit)%"
         switch decision.reason {
         case .schedule, .gap:
+            if discharging { text += " · 正在放到 \(decision.limit)%" }
             if let change = schedule.nextChange(after: minute) {
                 text += " · \(change.at.text) 起 \(change.limit)%"
             }
@@ -662,6 +798,7 @@ final class AppModel: ObservableObject {
 
     func loadPreview(_ value: SystemReading, history: ChargeHistory, minute: Int) {
         reading = value
+        helper = value.helper
         self.history = history
         self.minute = minute
         recompute()

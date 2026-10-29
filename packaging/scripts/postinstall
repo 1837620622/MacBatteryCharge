@@ -1,0 +1,20 @@
+#!/bin/sh
+# PKG 装完后：如果用户以前同意装过放电帮手，就把帮手也换成这一版，免得程序和帮手版本对不上。
+# 没装过帮手的不会在这里装，帮手只在窗口里点「安装放电帮手」时才装。
+APP="/Applications/MacBatteryCharge.app"
+HELPER_SRC="$APP/Contents/Helpers/MacBatteryChargeHelper"
+LABEL="com.macbatterycharge.helper"
+BIN="/Library/PrivilegedHelperTools/$LABEL"
+PLIST="/Library/LaunchDaemons/$LABEL.plist"
+
+if [ -f "$PLIST" ] && [ -x "$HELPER_SRC" ]; then
+    VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null)"
+    /bin/launchctl bootout "system/$LABEL" 2>/dev/null
+    /bin/cp "$HELPER_SRC" "$BIN" && /usr/sbin/chown root:wheel "$BIN" && /bin/chmod 755 "$BIN"
+    /usr/bin/xattr -cr "$BIN" 2>/dev/null
+    if [ -n "$VERSION" ]; then
+        /usr/libexec/PlistBuddy -c "Set :ProgramArguments:4 $VERSION" "$PLIST" 2>/dev/null
+    fi
+    /bin/launchctl bootstrap system "$PLIST" 2>/dev/null
+fi
+exit 0

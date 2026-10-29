@@ -17,12 +17,30 @@ enum Snapshot {
         }
 
         var ok = true
+        let folds = ["top", "bottom", "history", "schedule", "smart", "helper", "notch", "system"]
+        func setFolds(_ values: [String: Bool]) {
+            for key in folds { UserDefaults.standard.set(values[key] ?? true, forKey: "fold.\(key)") }
+        }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let model = sampleModel()
+            setFolds([:])
             ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
                         to: directory.appendingPathComponent("main-\(name).png")) && ok
             ok = render(MainView(model: model).frame(width: 420, height: 2000), size: NSSize(width: 420, height: 2000),
                         appearance: appearance, to: directory.appendingPathComponent("main-full-\(name).png")) && ok
+            // 第一层、第二层都收起
+            setFolds(["top": false, "bottom": false])
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 560), appearance: appearance,
+                        to: directory.appendingPathComponent("main-folded-\(name).png")) && ok
+            // 只收第二层的卡片
+            setFolds(["history": false, "schedule": true, "smart": false, "helper": false, "notch": false, "system": false])
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 900), appearance: appearance,
+                        to: directory.appendingPathComponent("main-cards-folded-\(name).png")) && ok
+            setFolds([:])
+            ok = render(islandPreview(model: model, expanded: true), size: NotchIsland.panelSize, appearance: .darkAqua,
+                        to: directory.appendingPathComponent("island-expanded-\(name).png")) && ok
+            ok = render(islandPreview(model: model, expanded: false), size: NotchIsland.panelSize, appearance: .darkAqua,
+                        to: directory.appendingPathComponent("island-ears-\(name).png")) && ok
             for step in GuideCopy.titles.indices {
                 let guide = GuideView(model: model, startStep: step, fixedPhase: 0.8)
                     .background(Color(nsColor: .windowBackgroundColor))
@@ -64,8 +82,10 @@ enum Snapshot {
                                     inactive: 3 * gib / page, wired: 2 * gib / page, compressed: gib / page,
                                     speculative: 0, pressure: 1)
 
+        let helper = HelperStatus(version: Installation.version, adapterControl: true, chargeControl: .system,
+                                  adapterEnabled: true, percent: 80, external: true, leaseRemaining: 0)
         let reading = SystemReading(battery: battery, memory: memory, chargeLimit: .current(80),
-                                    lowPower: LowPowerState(battery: 0, ac: 0), thermal: .nominal, date: now)
+                                    lowPower: LowPowerState(battery: 0, ac: 0), thermal: .nominal, date: now, helper: helper)
         model.loadPreview(reading, history: sampleHistory(ending: now, schedule: schedule), minute: currentMinute(now))
         return model
     }
@@ -96,6 +116,19 @@ enum Snapshot {
             history.addHealth(HealthPoint(day: AppModel.dayFormatter.string(from: date), health: 93 - day / 20, cycles: 160 + day))
         }
         return history
+    }
+
+    /// 灵动岛放在深灰底上，看得出它和屏幕的边。
+    @MainActor
+    static func islandPreview(model: AppModel, expanded: Bool) -> some View {
+        let state = IslandState()
+        state.geometry = NotchGeometry(screenFrame: NSRect(x: 0, y: 0, width: 400, height: 190), width: 190, height: 32, real: true)
+        state.expanded = expanded
+        state.ears = !expanded
+        return ZStack(alignment: .top) {
+            Color(white: 0.22)
+            IslandView(model: model, state: state, onOpen: {})
+        }
     }
 
     // MARK: 画图

@@ -100,16 +100,19 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
     public var end: ClockTime
     public var limit: Int
     public var lowPower: LowPowerChoice
+    /// 接着电源、电量高于上限时，先用电池放到上限再停住。要装放电帮手。
+    public var discharge: Bool
 
-    public init(start: ClockTime, end: ClockTime, limit: Int, lowPower: LowPowerChoice = .off) {
+    public init(start: ClockTime, end: ClockTime, limit: Int, lowPower: LowPowerChoice = .off, discharge: Bool = false) {
         self.start = start
         self.end = end
         self.limit = limit
         self.lowPower = lowPower
+        self.discharge = discharge
     }
 
     enum CodingKeys: String, CodingKey {
-        case start, end, limit, lowPower
+        case start, end, limit, lowPower, discharge
     }
 
     public init(from decoder: Decoder) throws {
@@ -118,6 +121,7 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
         end = try container.decode(ClockTime.self, forKey: .end)
         limit = try container.decode(Int.self, forKey: .limit)
         lowPower = (try? container.decodeIfPresent(LowPowerChoice.self, forKey: .lowPower)) ?? .off
+        discharge = ((try? container.decodeIfPresent(Bool.self, forKey: .discharge)) ?? nil) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -126,6 +130,7 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
         try container.encode(end, forKey: .end)
         try container.encode(limit, forKey: .limit)
         try container.encode(lowPower, forKey: .lowPower)
+        try container.encode(discharge, forKey: .discharge)
     }
 
     public var length: Int { start.minutes(until: end) }
@@ -205,6 +210,7 @@ public struct Schedule: Equatable, Sendable {
     public func isGap(at minute: Int) -> Bool { slot(minute) < 0 }
     public func limit(at minute: Int) -> Int { interval(at: minute)?.limit ?? 100 }
     public func lowPower(at minute: Int) -> LowPowerChoice { interval(at: minute)?.lowPower ?? .off }
+    public func discharge(at minute: Int) -> Bool { interval(at: minute)?.discharge ?? false }
 
     public struct Change: Equatable, Sendable {
         public var minutesAhead: Int
@@ -267,10 +273,10 @@ public struct Schedule: Equatable, Sendable {
         return nil
     }
 
-    /// 06:00 来电后停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
+    /// 06:00 来电后放到并停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
     public static func makeDefaults() -> [Interval] {
         [
-            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, lowPower: .off),
+            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, lowPower: .off, discharge: true),
             Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100, lowPower: .battery),
         ]
     }

@@ -21,6 +21,8 @@ struct RootView: View {
 
 struct MainView: View {
     @ObservedObject var model: AppModel
+    @AppStorage("fold.top") private var topOpen = true
+    @AppStorage("fold.bottom") private var bottomOpen = true
 
     var body: some View {
         ScrollView {
@@ -29,24 +31,125 @@ struct MainView: View {
                 HeroCard(model: model)
                 if let tonight = model.tonight { TonightCard(tonight: tonight) }
 
-                SectionTitle(title: "上排", subtitle: "读数")
-                ReadingsCard(model: model)
-                let advice = model.advice
-                if !advice.isEmpty { AdviceCard(items: advice) }
-                HistoryCard(model: model)
+                FoldHeader(title: "上排", subtitle: "读数", summary: topSummary, open: $topOpen)
+                if topOpen {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ReadingsCard(model: model)
+                        let advice = model.advice
+                        if !advice.isEmpty { AdviceCard(items: advice) }
+                        HistoryCard(model: model)
+                    }
+                    .transition(.opacity)
+                }
 
-                Divider().padding(.vertical, 6)
+                Divider().padding(.vertical, 2)
 
-                SectionTitle(title: "下排", subtitle: "时间表和设置")
-                ScheduleCard(model: model)
-                SmartCard(model: model)
-                SystemCard(model: model)
+                FoldHeader(title: "下排", subtitle: "时间表和设置", summary: bottomSummary, open: $bottomOpen)
+                if bottomOpen {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ScheduleCard(model: model)
+                        HelperCard(model: model)
+                        SmartCard(model: model)
+                        NotchCard(model: model)
+                        SystemCard(model: model)
+                    }
+                    .transition(.opacity)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
             .padding(.bottom, 14)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { FooterBar(model: model) }
+    }
+
+    private var topSummary: String {
+        let battery = model.battery
+        guard battery.present else { return "没有电池" }
+        var parts = [battery.percent.map { "\($0)%" } ?? "—", battery.flow.menuWord]
+        if let celsius = battery.celsius { parts.append(String(format: "%.0f°C", celsius)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var bottomSummary: String {
+        let count = model.settings.intervals.count
+        var text = count == 0 ? "全天 100%" : "\(count) 段"
+        if model.settings.deadlineEnabled { text += " · \(model.settings.deadline.text) 断电" }
+        return text
+    }
+}
+
+/// 上排、下排的标题。点一下整排收起，收起时右边写一句摘要。
+struct FoldHeader: View {
+    var title: String
+    var subtitle: String
+    var summary: String
+    @Binding var open: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.22)) { open.toggle() }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.headline)
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if !open {
+                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel("\(title)，\(subtitle)")
+        .accessibilityHint(open ? "收起" : "展开")
+    }
+}
+
+/// 第二层：卡片自己也能收起。收起状态记在本机。
+struct FoldCard<Content: View>: View {
+    var title: String
+    var summary: String?
+    @AppStorage private var open: Bool
+    private let content: Content
+
+    init(_ title: String, key: String, defaultOpen: Bool = true, summary: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.summary = summary
+        _open = AppStorage(wrappedValue: defaultOpen, "fold.\(key)")
+        self.content = content()
+    }
+
+    var body: some View {
+        Card {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(title).font(.headline)
+                    Spacer(minLength: 8)
+                    if !open, let summary {
+                        Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityHint(open ? "收起" : "展开")
+            if open { content.transition(.opacity) }
+        }
     }
 }
 
@@ -62,6 +165,22 @@ struct BannerStack: View {
                 Button(model.moving ? "正在放进去…" : "放进去并重新打开") { model.moveToApplications() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.moving)
+            }
+        }
+        if model.dischargeWantedButMissing && model.helperInstallable && !model.preview {
+            Banner(symbol: "arrow.down.to.line.compact", tint: .orange, title: "这一段要放电，还没装放电帮手",
+                   detail: "没有它，电量高于 \(model.decision.limit)% 时只会停止充电，不会往下放。装一次要管理员密码。") {
+                Button(model.helperBusy ? "正在安装…" : "安装放电帮手") { model.installHelper() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.helperBusy)
+            }
+        }
+        if model.helperOutdated && !model.preview {
+            Banner(symbol: "arrow.triangle.2.circlepath", tint: .orange, title: "放电帮手要更新",
+                   detail: "软件升级后帮手的版本不一样了。更新时要一次管理员密码。") {
+                Button(model.helperBusy ? "正在更新…" : "更新放电帮手") { model.installHelper() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.helperBusy)
             }
         }
         if let error = model.scheduleError {
@@ -351,15 +470,19 @@ struct AdviceCard: View {
 struct HistoryCard: View {
     @ObservedObject var model: AppModel
 
+    private static let past: TimeInterval = 16 * 3600
+
     var body: some View {
         let end = model.reading?.date ?? Date()
-        let samples = model.history.samples(since: end.addingTimeInterval(-24 * 3600))
-        Card {
-            HStack {
-                Text("最近 24 小时").font(.headline)
+        let samples = model.history.samples(since: end.addingTimeInterval(-Self.past))
+        let forecast = model.forecast
+        FoldCard("电量曲线", key: "history", summary: "过去 16 小时和之后几小时") {
+            HStack(spacing: 10) {
+                Text("过去 16 小时 · 之后预测").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 legend(color: .accentColor, text: "电量", dashed: false)
-                legend(color: .secondary, text: "上限", dashed: true)
+                legend(color: .accentColor.opacity(0.55), text: "预测", dashed: true)
+                legend(color: .secondary, text: "上限", dashed: false, thin: true)
             }
             if samples.count < 2 {
                 Text("开着软件一段时间后，这里会画出电量和上限。")
@@ -380,8 +503,21 @@ struct HistoryCard: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                             .interpolationMethod(.stepEnd)
                     }
+                    ForEach(forecast, id: \.minutesAhead) { point in
+                        LineMark(x: .value("时间", end.addingTimeInterval(Double(point.minutesAhead) * 60)),
+                                 y: .value("预测", point.percent), series: .value("系列", "预测"))
+                            .foregroundStyle(Color.accentColor.opacity(0.6))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                    }
+                    RuleMark(x: .value("现在", end))
+                        .foregroundStyle(Color.primary.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .annotation(position: .top, alignment: .leading, spacing: 0) {
+                            Text("现在").font(.caption2).foregroundStyle(.secondary)
+                        }
                 }
                 .chartYScale(domain: 0...100)
+                .chartXScale(domain: end.addingTimeInterval(-Self.past)...end.addingTimeInterval(8 * 3600))
                 .chartYAxis {
                     AxisMarks(position: .leading, values: [0, 50, 80, 100]) { _ in
                         AxisGridLine()
@@ -389,21 +525,21 @@ struct HistoryCard: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                    AxisMarks(values: .stride(by: .hour, count: 4)) { _ in
                         AxisGridLine()
                         AxisValueLabel(format: .dateTime.hour(.twoDigits(amPM: .omitted)))
                     }
                 }
-                .frame(height: 130)
-                .accessibilityLabel("最近 24 小时的电量曲线")
+                .frame(height: 140)
+                .accessibilityLabel("过去 16 小时的电量曲线，和之后几小时的预测")
             }
         }
     }
 
-    private func legend(color: Color, text: String, dashed: Bool) -> some View {
+    private func legend(color: Color, text: String, dashed: Bool, thin: Bool = false) -> some View {
         HStack(spacing: 4) {
             Capsule()
-                .stroke(color, style: StrokeStyle(lineWidth: 2, dash: dashed ? [3, 2] : []))
+                .stroke(color, style: StrokeStyle(lineWidth: thin ? 1 : 2, dash: dashed ? [3, 2] : (thin ? [3, 2] : [])))
                 .frame(width: 14, height: 2)
             Text(text).font(.caption).foregroundStyle(.secondary)
         }
@@ -416,12 +552,8 @@ struct ScheduleCard: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        Card {
-            HStack {
-                Text("时间表").font(.headline)
-                Spacer()
-                Text("空档按 100%").font(.caption).foregroundStyle(.secondary)
-            }
+        FoldCard("时间表", key: "schedule", summary: "\(model.limitLine)") {
+            Text("空档按 100%。点时间条或下面的一行来改。").font(.caption).foregroundStyle(.secondary)
             TimelineBar(schedule: model.schedule, minute: model.minute,
                         selectedIndex: model.schedule.intervals.firstIndex { $0.id == model.editingID }) { index in
                 let id = model.schedule.intervals[index].id
@@ -438,6 +570,8 @@ struct ScheduleCard: View {
                     IntervalRow(item: $item, number: number,
                                 isCurrent: model.currentInterval?.id == id && model.scheduleError == nil,
                                 isEditing: model.editingID == id,
+                                helperReady: model.helperUsable,
+                                onInstallHelper: { model.installHelper() },
                                 onTap: { withAnimation(.easeInOut(duration: 0.2)) { model.editingID = model.editingID == id ? nil : id } },
                                 onDelete: { withAnimation { model.removeInterval(id) } },
                                 onCommit: { model.sortIntervals() })
@@ -469,6 +603,8 @@ struct IntervalRow: View {
     var number: Int
     var isCurrent: Bool
     var isEditing: Bool
+    var helperReady: Bool
+    var onInstallHelper: () -> Void
     var onTap: () -> Void
     var onDelete: () -> Void
     var onCommit: () -> Void
@@ -485,7 +621,7 @@ struct IntervalRow: View {
                         .foregroundStyle(isCurrent ? Color.white : Color.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.rangeText).monospacedDigit()
-                        Text("低电量 \(item.lowPower.shortTitle)" + (isCurrent ? " · 现在这一段" : ""))
+                        Text("低电量 \(item.lowPower.shortTitle)" + (item.discharge ? " · 放电" : "") + (isCurrent ? " · 现在这一段" : ""))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -505,7 +641,7 @@ struct IntervalRow: View {
             .accessibilityHint(isEditing ? "收起" : "展开编辑")
 
             if isEditing {
-                IntervalEditor(item: $item, onDelete: onDelete)
+                IntervalEditor(item: $item, helperReady: helperReady, onInstallHelper: onInstallHelper, onDelete: onDelete)
                     .onDisappear(perform: onCommit)
             }
         }
@@ -515,6 +651,8 @@ struct IntervalRow: View {
 
 struct IntervalEditor: View {
     @Binding var item: Interval
+    var helperReady: Bool
+    var onInstallHelper: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
@@ -528,6 +666,18 @@ struct IntervalEditor: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+            }
+            if item.limit < 100 {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $item.discharge) {
+                        OptionLabel(title: "高于上限时放电",
+                                    detail: "接着电源也用电池，放到 \(item.limit)% 就停。只在这一段、放电帮手装好时生效。")
+                    }
+                    .toggleStyle(.switch)
+                    if item.discharge && !helperReady {
+                        Button("安装放电帮手…", action: onInstallHelper).controlSize(.small)
+                    }
+                }
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("这一段的低电量").font(.subheadline).foregroundStyle(.secondary)
@@ -614,11 +764,11 @@ struct SmartCard: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        Card {
-            Text("聪明一点").font(.headline)
+        FoldCard("聪明一点", key: "smart", defaultOpen: false,
+                 summary: model.settings.deadlineEnabled ? "\(model.settings.deadline.text) 断电前充满" : "断电前充满：关") {
             Toggle(isOn: $model.settings.deadlineEnabled) {
                 OptionLabel(title: "断电前充满",
-                            detail: "按这台机器自己的充电速度，必要时比时间表早一点放开。只往上放，不会放电。")
+                            detail: "按这台机器自己的充电速度，必要时比时间表早一点放开，只往上放。")
             }
             if model.settings.deadlineEnabled {
                 TimeField(title: "断电", time: $model.settings.deadline)
@@ -631,6 +781,83 @@ struct SmartCard: View {
             Divider()
             Toggle(isOn: $model.settings.notifications) {
                 OptionLabel(title: "通知", detail: "停在上限、提前放开、过热时发一条系统通知。打开时才会问通知权限。")
+            }
+        }
+        .toggleStyle(.switch)
+    }
+}
+
+struct HelperCard: View {
+    @ObservedObject var model: AppModel
+
+    private var summary: String {
+        if model.helperOutdated { return "要更新" }
+        guard let helper = model.helper else { return "没装" }
+        return helper.adapterControl ? "已装" : "已装，这台不支持"
+    }
+
+    private var detail: String {
+        guard let helper = model.helper else {
+            return "接着电源也把电放到上限，要靠这个以 root 运行的小程序断开电源适配器。装一次要管理员密码，只有这一个密码框。"
+        }
+        if !helper.adapterControl { return "已装，但这台 Mac 的 SMC 里找不到断开电源的开关，放电用不了。仍然只会停止充电。" }
+        if helper.adapterEnabled == false { return "正在放电：电源适配器暂时断开，放到上限就接回。" }
+        return "已装好。需要放电时才断开电源适配器，放到上限就接回；睡眠、退出或 2 分钟收不到指令都会自动接回。"
+    }
+
+    var body: some View {
+        FoldCard("放电帮手", key: "helper", defaultOpen: model.helper == nil, summary: summary) {
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error = model.helper?.error {
+                Text("最近一次出错：\(error)").font(.caption).foregroundStyle(.orange)
+            }
+            HStack(spacing: 8) {
+                if model.helper == nil || model.helperOutdated {
+                    Button(model.helperBusy ? "正在安装…" : (model.helperOutdated ? "更新放电帮手" : "安装放电帮手")) { model.installHelper() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.helperBusy || !model.helperInstallable)
+                    if !model.helperInstallable {
+                        Text(SystemReaders.isAppleSilicon ? "这份软件里没有帮手" : "只支持 Apple 芯片")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if model.helper != nil {
+                    Button("卸载放电帮手", role: .destructive) { model.removeHelper() }
+                        .disabled(model.helperBusy)
+                }
+                Spacer(minLength: 0)
+            }
+            .controlSize(.small)
+        }
+    }
+}
+
+struct NotchCard: View {
+    @ObservedObject var model: AppModel
+
+    private var summary: String {
+        let settings = model.settings
+        if settings.notchIsland { return "灵动岛 开" }
+        return settings.notchEars ? "两侧小字" : "关"
+    }
+
+    var body: some View {
+        FoldCard("刘海", key: "notch", defaultOpen: false, summary: summary) {
+            Toggle(isOn: $model.settings.notchIsland) {
+                OptionLabel(title: "刘海灵动岛", detail: "鼠标移到刘海上，从刘海里展开电量、上限和今晚的计划。只读鼠标位置，不要任何隐私权限。")
+            }
+            Toggle(isOn: $model.settings.notchOnPower) {
+                OptionLabel(title: "插拔电源时弹一下", detail: "插上或拔掉电源时，灵动岛自己展开几秒。")
+            }
+            .disabled(!model.settings.notchIsland)
+            Toggle(isOn: $model.settings.notchEars) {
+                OptionLabel(title: "刘海两侧常驻小字", detail: "左边是上限，右边是充电、放电或接通。会盖住刘海两边一小块菜单栏。")
+            }
+            Toggle(isOn: $model.settings.notchWithoutNotch) {
+                OptionLabel(title: "没有刘海的屏幕也用", detail: "在菜单栏正中虚拟一个，外接显示器或旧款 Mac 也能用。")
             }
         }
         .toggleStyle(.switch)
@@ -675,8 +902,7 @@ struct SystemCard: View {
     }
 
     var body: some View {
-        Card {
-            Text("系统").font(.headline)
+        FoldCard("系统", key: "system", defaultOpen: false, summary: "版本 \(Installation.version)") {
             Toggle(isOn: $model.settings.launchAtLogin) {
                 OptionLabel(title: "登录时打开", detail: loginDetail)
             }

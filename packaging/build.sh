@@ -14,6 +14,10 @@ mkdir -p build dist
 
 swift test
 
+# 性能预算：超了就失败。
+swift build -c release --product MacBatteryCharge
+"$(swift build -c release --show-bin-path)/MacBatteryCharge" --bench
+
 ICONSET="$ROOT/build/AppIcon.iconset"
 mkdir -p "$ICONSET"
 for base in 16 32 128 256 512; do
@@ -33,18 +37,23 @@ build_app() {
     local bin
     bin="$(swift build -c release --triple "$triple" --show-bin-path)"
 
-    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Helpers"
     sed "s/__VERSION__/$VERSION/g" packaging/Info.plist > "$app/Contents/Info.plist"
     cp "$ROOT/build/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
     cp "$bin/MacBatteryCharge" "$app/Contents/MacOS/MacBatteryCharge"
+    cp "$bin/MacBatteryChargeHelper" "$app/Contents/Helpers/MacBatteryChargeHelper"
     plutil -lint "$app/Contents/Info.plist" >/dev/null
 
     local got
-    got="$(lipo -archs "$app/Contents/MacOS/MacBatteryCharge")"
-    if [[ "$got" != "$arch" ]]; then
-        echo "架构不符：要 $arch，实际 $got"
-        exit 1
-    fi
+    for binary in "$app/Contents/MacOS/MacBatteryCharge" "$app/Contents/Helpers/MacBatteryChargeHelper"; do
+        got="$(lipo -archs "$binary")"
+        if [[ "$got" != "$arch" ]]; then
+            echo "架构不符：$binary 要 $arch，实际 $got"
+            exit 1
+        fi
+    done
+    # 里面的帮手先签，再签整个 app。
+    codesign --force --sign - --identifier com.macbatterycharge.helper "$app/Contents/Helpers/MacBatteryChargeHelper"
     codesign --force --sign - "$app"
 
     # PKG 固定装到 /Applications。不允许“搬家”，否则系统会装到别处找到的旧副本上。
@@ -57,6 +66,7 @@ build_app() {
     pkgbuild \
         --root "$stage" \
         --component-plist "$components" \
+        --scripts "$ROOT/packaging/scripts" \
         --install-location /Applications \
         --identifier com.macbatterycharge.pkg \
         --version "$VERSION" \
