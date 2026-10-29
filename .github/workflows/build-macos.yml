@@ -49,7 +49,7 @@ jobs:
           python3 tools/charge_shortcuts.py --output build/unsigned
           for f in build/unsigned/*.shortcut; do plutil -lint "$f"; done
 
-      - name: Sign both shortcuts with Apple
+      - name: Use Mac-signed shortcuts
         shell: bash
         env:
           LANG: en_US.UTF-8
@@ -57,17 +57,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/signed
-          for name in 白天充电上限80 晚间充电上限100; do
-            src="build/unsigned/${name}.unsigned.shortcut"
-            dst="build/signed/${name}.shortcut"
-            if ! /usr/bin/shortcuts sign --mode anyone --input "$src" --output "$dst"; then
-              echo 'XML signing failed. Retrying after binary plist conversion.'
-              plutil -convert binary1 -o "build/unsigned/${name}.binary.shortcut" "$src"
-              /usr/bin/shortcuts sign --mode anyone --input "build/unsigned/${name}.binary.shortcut" --output "$dst"
-            fi
-            test -s "$dst"
-            echo "Signed $name ($(wc -c < "$dst") bytes)"
-          done
+          python3 - <<'PY'
+          import pathlib
+          names = ["白天充电上限80", "晚间充电上限100"]
+          src_dir = pathlib.Path("signed")
+          dst_dir = pathlib.Path("build/signed")
+          for name in names:
+              src = src_dir / f"{name}.shortcut"
+              data = src.read_bytes()
+              if len(data) < 100 or data[:4] != b"AEA1":
+                  raise SystemExit(f"Missing Apple-signed shortcut: {src}")
+              (dst_dir / src.name).write_bytes(data)
+              print(f"Using {src} ({len(data)} bytes)")
+          PY
 
       - name: Create installation ZIP and verify integrity
         shell: bash

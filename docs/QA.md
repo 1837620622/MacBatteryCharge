@@ -7,7 +7,7 @@
 - 检查原生动作标识与必要参数：`limit`、`setUntilTomorrow = false`。
 - 检查快捷指令源文件 plist 可解析，且每条文件只包含对应充电上限动作。
 - 检查 Shell 语法、安装包目录和 ZIP 文件校验。
-- GitHub Actions 使用 macOS runner 执行 Apple 签名；签名失败则不发布安装文件。
+- GitHub Actions 检查 `signed/` 里的 Apple 签名文件头为 `AEA1`，再打包；runner 本身不签名。
 
 ## 不能由 GitHub runner 替代的测试
 

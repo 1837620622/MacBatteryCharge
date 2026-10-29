@@ -39,11 +39,11 @@
 
 ## 常见问题
 
-### 工作流签名失败
+### 工作流签名
 
-GitHub runner 无 Apple ID 的环境可能无法签署 `anyone` 共享文件。检查 Actions 内的 `Sign both shortcuts with Apple` 日志，不能将生成的 `.unsigned.shortcut` 当作最终文件使用。
+GitHub runner 没有 iCloud，不能执行 `shortcuts sign`。发布包里的两条快捷指令来自仓库 `signed/`，那是在已登录 iCloud 的 Mac 上用 `--mode anyone` 签好的。Actions 会检查文件头是 `AEA1`，再打成 ZIP。
 
-本机可用：打开仓库源码，在 Mac 终端执行 `bash scripts/local_build.command`，本地 `people-who-know-me` 签名，生成 `dist/MacBatteryCharge-macOS-Installer.zip`。该文件只适合本人导入。如果本机签名也失败，可能是系统或 Apple 服务验证问题，需要排查，不能绕过系统签名检查。
+本机重新签名：在仓库根目录执行 `bash scripts/local_build.command`。公开分发前把签好的文件放进 `signed/` 再提交。未签名的 `.unsigned.shortcut` 不能导入。
 
 ### 快捷指令里显示“未知操作”
 

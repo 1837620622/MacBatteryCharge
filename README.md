@@ -30,7 +30,7 @@ MacBook 充电上限定时切换，按这套作息：
 5. 解压安装包，双击 **`安装.command`**，按提示在快捷指令应用里点击两次“添加快捷指令”。导入完成后，安装器自动创建并启用两个时间点的定时任务。
 6. 完成后双击 **`检查状态.command`** 查看日志，再到“系统设置 → 电池”核对充电上限是否真的改变。
 
-**提醒：** GitHub Actions 使用 Apple 提供的 macOS runner 和 `shortcuts sign --mode anyone` 签名；签名需要访问 Apple 服务。若 Apple 在无账号的 runner 上拒绝签名，构建会**明确失败**，不会发布一个冒充可安装文件的 ZIP。遇到此情况可在自己的 Mac 上执行 `scripts/local_build.command`，它会使用本机签名模式制作相同的安装包。该本机签名版本适合自己导入，不适合公开分享。
+**提醒：** 快捷指令必须由已登录 iCloud 的 Mac 签名。GitHub 的 macOS runner 没有 iCloud，直接签名会被 Apple 拒绝。因此仓库 `signed/` 里放的是本机用 `shortcuts sign --mode anyone` 签好的文件，Actions 只做检查、打包和发布。改了快捷指令内容后，先在 Mac 上重新签名，再把 `signed/` 一起提交。
 
 ## 安装后如何运行
 
