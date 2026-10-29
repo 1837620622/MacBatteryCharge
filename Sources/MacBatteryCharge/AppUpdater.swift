@@ -182,10 +182,21 @@ enum AppUpdater {
             try? fm.removeItem(at: incoming)
             return .failed(T("复制新版本没有成功：%@", ["\(copied.err)"]))
         }
-        try? fm.removeItem(at: parent.appendingPathComponent(UpdateResidue.previousName))
+        // 两步改名：旧的先改成备份名，新的再改到原来的名字。备份留着，出问题时能换回去；
+        // 新版本正常打开以后，下次启动再删（Migration）。不用 replaceItemAt：它成功以后会把备份删掉（自检看到的）。
+        let backup = parent.appendingPathComponent(UpdateResidue.previousName)
+        try? fm.removeItem(at: backup)
         do {
-            _ = try fm.replaceItemAt(destination, withItemAt: incoming, backupItemName: UpdateResidue.previousName)
+            try fm.moveItem(at: destination, to: backup)
         } catch {
+            try? fm.removeItem(at: incoming)
+            return .failed(T("换新版本没有成功：%@", ["\(error.localizedDescription)"]))
+        }
+        do {
+            try fm.moveItem(at: incoming, to: destination)
+        } catch {
+            // 新的没放进去：把旧的换回来，「应用程序」里还是原来那一版。
+            try? fm.moveItem(at: backup, to: destination)
             try? fm.removeItem(at: incoming)
             return .failed(T("换新版本没有成功：%@", ["\(error.localizedDescription)"]))
         }
