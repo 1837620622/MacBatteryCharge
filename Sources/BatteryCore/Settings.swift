@@ -44,6 +44,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let transparencyRange = 0.0...0.7
     public var lastUpdateCheck: Date?
     public var skippedVersion: String?
+    /// 今天不放电的那一天（yyyy-MM-dd）。只管当天，过了午夜自动失效。
+    public var dischargeOffDay: String?
 
     public init(intervals: [Interval] = Schedule.makeDefaults()) {
         self.intervals = intervals
@@ -53,7 +55,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case intervals, launchAtLogin, guideSeen, autoCheckUpdates, deadlineEnabled, deadline
         case heatProtection, notifications, lastUpdateCheck, skippedVersion
         case notchIsland, notchOnPower, notchEars, notchWithoutNotch
-        case look, transparency
+        case look, transparency, dischargeOffDay
         case lowPowerAuto
     }
 
@@ -107,6 +109,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         transparency = rawTransparency.isFinite ? min(max(rawTransparency, Self.transparencyRange.lowerBound), Self.transparencyRange.upperBound) : 0.25
         lastUpdateCheck = (try? c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)) ?? nil
         skippedVersion = (try? c.decodeIfPresent(String.self, forKey: .skippedVersion)) ?? nil
+        dischargeOffDay = (try? c.decodeIfPresent(String.self, forKey: .dischargeOffDay)) ?? nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -127,6 +130,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try c.encode(transparency, forKey: .transparency)
         try c.encodeIfPresent(lastUpdateCheck, forKey: .lastUpdateCheck)
         try c.encodeIfPresent(skippedVersion, forKey: .skippedVersion)
+        try c.encodeIfPresent(dischargeOffDay, forKey: .dischargeOffDay)
     }
 
     public static var directory: URL {

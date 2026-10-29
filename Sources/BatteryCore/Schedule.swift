@@ -102,17 +102,20 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
     public var lowPower: LowPowerChoice
     /// 接着电源、电量高于上限时，先用电池放到上限再停住。要装放电帮手。
     public var discharge: Bool
+    /// 漂移范围：0 为关。打开后，电量超过上限就放电，掉到 上限 − 范围 才接电，中间自己漂。
+    public var drift: Int
 
-    public init(start: ClockTime, end: ClockTime, limit: Int, lowPower: LowPowerChoice = .off, discharge: Bool = false) {
+    public init(start: ClockTime, end: ClockTime, limit: Int, lowPower: LowPowerChoice = .off, discharge: Bool = false, drift: Int = 0) {
         self.start = start
         self.end = end
         self.limit = limit
         self.lowPower = lowPower
         self.discharge = discharge
+        self.drift = drift
     }
 
     enum CodingKeys: String, CodingKey {
-        case start, end, limit, lowPower, discharge
+        case start, end, limit, lowPower, discharge, drift
     }
 
     public init(from decoder: Decoder) throws {
@@ -131,6 +134,18 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
         try container.encode(limit, forKey: .limit)
         try container.encode(lowPower, forKey: .lowPower)
         try container.encode(discharge, forKey: .discharge)
+        try container.encode(drift, forKey: .drift)
+    }
+
+    /// 漂移只在这一段放电时才有效，别的情况一律当作关。
+    public static let driftChoices = [5, 10]
+    public var activeDrift: Int {
+        discharge && limit < 100 && Self.driftChoices.contains(drift) ? drift : 0
+    }
+
+    /// 放电时接电的电量。没有漂移就是上限本身。
+    public var resumeAt: Int {
+        activeDrift > 0 ? max(limit - activeDrift, ChargePolicy.dischargeFloor) : limit
     }
 
     public var length: Int { start.minutes(until: end) }
@@ -211,6 +226,14 @@ public struct Schedule: Equatable, Sendable {
     public func limit(at minute: Int) -> Int { interval(at: minute)?.limit ?? 100 }
     public func lowPower(at minute: Int) -> LowPowerChoice { interval(at: minute)?.lowPower ?? .off }
     public func discharge(at minute: Int) -> Bool { interval(at: minute)?.discharge ?? false }
+    public func resumeAt(at minute: Int) -> Int { interval(at: minute)?.resumeAt ?? 100 }
+
+    /// 窗口上的一句话：「06:00 起 80% · 21:00 起 100% · 23:30 断电」。
+    public func dayLine(deadline: ClockTime?) -> String {
+        var parts = intervals.sorted { $0.start < $1.start }.map { "\($0.start.text) 起 \($0.limit)%" }
+        if let deadline { parts.append("\(deadline.text) 断电") }
+        return parts.isEmpty ? "全天 100%" : parts.joined(separator: " · ")
+    }
 
     public struct Change: Equatable, Sendable {
         public var minutesAhead: Int

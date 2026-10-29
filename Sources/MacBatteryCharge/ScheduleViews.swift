@@ -69,6 +69,7 @@ struct IntervalRow: View {
     private var subtitle: String? {
         var parts: [String] = []
         if item.discharge && item.limit < 100 { parts.append("放电") }
+        if item.activeDrift > 0 { parts.append("漂 \(item.activeDrift)%") }
         if item.lowPower != .off { parts.append("低电量\(item.lowPower.shortTitle)") }
         if isCurrent { parts.append("现在") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -134,10 +135,24 @@ struct IntervalEditor: View {
             }
             if item.limit < 100 {
                 ToggleRow(title: "高于上限时放电",
-                          info: "接着电源也用电池放到上限，最低 20%。要装放电帮手。",
+                          info: "超过上限 3% 才开始放，放到上限就接电，最低 20%。需要放电帮手。",
                           isOn: $item.discharge)
                 if item.discharge && !helperReady {
                     Button("安装放电帮手…", action: onInstallHelper).controlSize(.small)
+                }
+                if item.discharge {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Text("漂移").font(.subheadline).foregroundStyle(.secondary)
+                            InfoButton(text: "关：到上限就停住。开：到上限开始放，掉到下面这么多才接电，电量在中间自己漂，少在满电里待着。")
+                        }
+                        Picker("漂移", selection: $item.drift) {
+                            Text("关").tag(0)
+                            ForEach(Interval.driftChoices, id: \.self) { Text("掉 \($0)%").tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
                 }
             }
             VStack(alignment: .leading, spacing: 6) {

@@ -44,13 +44,13 @@ public enum Forecast {
             let decision = ChargePolicy.decide(schedule: schedule, minute: now, topUp: topUp, deadlineLift: lift, heat: false)
             discharging = ChargePolicy.shouldDischarge(previous: discharging, percent: Int(p.rounded()), decision: decision,
                                                        enabled: dischargeAvailable && schedule.discharge(at: now),
-                                                       external: external)
+                                                       external: external, resumeAt: schedule.resumeAt(at: now))
             let span = Double(min(step, end - ahead))
             var charging = false
             if !external {
                 p = max(0, p - drain * span)
             } else if discharging {
-                p = max(Double(max(decision.limit, ChargePolicy.dischargeFloor)), p - drain * span)
+                p = max(Double(schedule.resumeAt(at: now)), p - drain * span)
             } else if p < Double(decision.limit) {
                 p = min(Double(decision.limit), p + rate * span)
                 charging = true

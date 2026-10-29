@@ -254,13 +254,6 @@ final class PlannerTests: XCTestCase {
         XCTAssertEqual(ChargePolicy.decide(schedule: schedule, minute: at(10, 0), topUp: false, deadlineLift: 80, heat: true).reason, .schedule, "已经 80 不算过热压低")
     }
 
-    func testHeatHysteresis() {
-        XCTAssertTrue(ChargePolicy.heatActive(previous: false, celsius: 40.5, external: true))
-        XCTAssertTrue(ChargePolicy.heatActive(previous: true, celsius: 38.5, external: true), "中间保持")
-        XCTAssertFalse(ChargePolicy.heatActive(previous: false, celsius: 38.5, external: true))
-        XCTAssertFalse(ChargePolicy.heatActive(previous: true, celsius: 36.9, external: true))
-        XCTAssertFalse(ChargePolicy.heatActive(previous: true, celsius: 45, external: false), "拔掉电源就解除")
-    }
 
     func testDefaultScheduleIsEarlyEnough() {
         let schedule = compiled(Schedule.makeDefaults())

@@ -12,6 +12,8 @@ public enum HelperInfo {
     public static let protocolVersion = 1
     /// 程序隔一会儿就续一次。帮手超过这个时间没收到，就自己接回电源，程序崩了也不会一直放下去。
     public static let maxLease = 300
+    /// 帮手自己设的上限（旧系统、Intel）超过这么久没有人续期，就放掉，恢复原样。
+    public static let limitLifetime: TimeInterval = 24 * 3600
 }
 
 public struct HelperRequest: Codable, Equatable, Sendable {
@@ -23,17 +25,20 @@ public struct HelperRequest: Codable, Equatable, Sendable {
     }
 
     public var cmd: Command
-    /// 只在系统没有原生充电上限、帮手能直接停充时才带。nil 表示帮手不管上限。
+    /// 上限。原生上限管不了时（旧系统、Intel），由帮手来设；nil 表示帮手不管上限。
     public var limit: Int?
     /// 放电到这里为止。nil 表示不放电。
     public var dischargeTo: Int?
+    /// 掉到这里才重新接电。nil 表示和 dischargeTo 一样（没有漂移）。
+    public var resumeAt: Int?
     /// 放电指令有效几秒。
     public var lease: Int?
 
-    public init(cmd: Command, limit: Int? = nil, dischargeTo: Int? = nil, lease: Int? = nil) {
+    public init(cmd: Command, limit: Int? = nil, dischargeTo: Int? = nil, resumeAt: Int? = nil, lease: Int? = nil) {
         self.cmd = cmd
         self.limit = limit
         self.dischargeTo = dischargeTo
+        self.resumeAt = resumeAt
         self.lease = lease
     }
 }
@@ -42,6 +47,8 @@ public struct HelperRequest: Codable, Equatable, Sendable {
 public enum HelperChargeControl: String, Codable, Sendable {
     /// CH0B/CH0C 或 CHTE，直接停充。
     case direct
+    /// Intel 的 BCLM：硬件里的充电上限，帮手写一个百分比。
+    case intelCeiling
     /// 新固件：充电上限由系统自己管，帮手不碰。
     case system
     case none
@@ -95,21 +102,23 @@ public enum HelperPolicy {
         public var sleeping: Bool
         public var limit: Int?
         public var dischargeTo: Int?
+        public var resumeAt: Int?
         public var leaseValid: Bool
         public var chargingBefore: Bool
         /// 电源适配器现在是不是被帮手断开着。断开后系统会说“没接电源”，所以这时不能再看 external。
         public var adapterDisabled: Bool
 
-        public init(percent: Int?, external: Bool, sleeping: Bool, limit: Int?, dischargeTo: Int?,
+        public init(percent: Int?, external: Bool, sleeping: Bool, limit: Int?, dischargeTo: Int?, resumeAt: Int? = nil,
                     leaseValid: Bool, chargingBefore: Bool, adapterDisabled: Bool = false) {
-            self.adapterDisabled = adapterDisabled
             self.percent = percent
             self.external = external
             self.sleeping = sleeping
             self.limit = limit
             self.dischargeTo = dischargeTo
+            self.resumeAt = resumeAt
             self.leaseValid = leaseValid
             self.chargingBefore = chargingBefore
+            self.adapterDisabled = adapterDisabled
         }
     }
 
@@ -118,15 +127,24 @@ public enum HelperPolicy {
         public var chargingAllowed: Bool
     }
 
-    /// 停充后降到上限下面 3% 再恢复，免得反复开关。
-    public static let rechargeBand = 3
+    /// 直接停充时：停在上限，掉到上限下面 5% 才恢复。苹果的上限也是“掉 5% 才续充”，我们和它一样。
+    public static let rechargeBand = 5
 
     public static func decide(_ input: Input) -> Output {
-        // 只有醒着、接着电源、指令没过期、电量高于目标和最低线时才断开电源。睡眠时一律接回，免得合盖放空。
+        // 放电：只有醒着、指令没过期、接着电源（或者已经断开了）时才动。睡眠时一律接回，免得合盖放空。
         var adapterOn = true
-        if let target = input.dischargeTo, let percent = input.percent, input.external || input.adapterDisabled, input.leaseValid, !input.sleeping,
-           percent > max(target, ChargePolicy.dischargeFloor) {
-            adapterOn = false
+        if let target = input.dischargeTo, let percent = input.percent, input.leaseValid, !input.sleeping,
+           input.external || input.adapterDisabled {
+            let window = ChargePolicy.dischargeWindow(limit: target, resumeAt: input.resumeAt ?? target)
+            let cutting: Bool
+            if percent <= ChargePolicy.dischargeFloor {
+                cutting = false
+            } else if input.adapterDisabled {
+                cutting = percent > window.resume
+            } else {
+                cutting = percent >= window.start
+            }
+            adapterOn = !cutting
         }
 
         guard let limit = input.limit, limit < 100, let percent = input.percent else {

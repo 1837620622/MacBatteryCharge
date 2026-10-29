@@ -237,22 +237,35 @@ struct HeroCard: View {
 
     var body: some View {
         let battery = model.battery
-        Card {
-            HStack(spacing: 14) {
-                LiquidRing(percent: battery.percent, limit: model.decision.limit, flow: model.displayFlow, live: model.liveMotion)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(model.statusTitle).font(.title3.weight(.semibold))
-                        Spacer(minLength: 4)
+        Card(padding: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                DayDial(schedule: model.schedule, minute: model.minute, percent: battery.percent,
+                        limit: model.decision.limit, flow: model.displayFlow, live: model.liveMotion,
+                        selectedIndex: model.schedule.intervals.firstIndex { $0.id == model.editingID }) { index in
+                    let id = model.schedule.intervals[index].id
+                    withAnimation(.easeInOut(duration: 0.2)) { model.editingID = model.editingID == id ? nil : id }
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Text(model.statusTitle)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Spacer(minLength: 0)
                         if model.windowVisible { LiveDot(stamp: model.reading?.date) }
                     }
                     Text(model.statusDetail)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     ReasonChip(text: model.limitLine, reason: model.decision.reason)
                 }
             }
+            Text(model.daySummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             if battery.present {
                 FlowStrip(plugged: battery.externalConnected, adapterCut: model.adapterCut,
                           adapterWatts: battery.adapterWatts, batteryWatts: battery.watts, live: model.liveMotion)
@@ -262,15 +275,23 @@ struct HeroCard: View {
                     } label: {
                         Label(model.topUpActive ? "结束临时充满" : "临时充满", systemImage: model.topUpActive ? "xmark.circle" : "bolt.fill")
                     }
-                    .controlSize(.small)
                     .help("到下一段开始或拔掉电源前，先放开到 100%。")
+                    if model.helperUsable || model.dischargeOffToday {
+                        Button {
+                            model.toggleDischargeOffToday()
+                        } label: {
+                            Label(model.dischargeOffToday ? "恢复今天放电" : "今天不放电", systemImage: "pause.circle")
+                        }
+                        .help("今天整天只保持现在的电量，过了午夜自动恢复。")
+                    }
                     if model.systemLimitMismatch {
-                        Label("系统是 \(model.reading?.chargeLimit.value ?? 0)%，正在改", systemImage: "arrow.triangle.2.circlepath")
+                        Text("正在改成 \(model.decision.limit)%")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
+                .controlSize(.small)
             }
         }
     }
@@ -486,9 +507,19 @@ struct HistoryCard: View {
         }
     }
 
+    /// 最多画 300 个点：曲线看起来一样，画起来快很多。
+    static func thin(_ samples: [ChargeSample], to count: Int = 300) -> [ChargeSample] {
+        guard samples.count > count else { return samples }
+        let step = Int((Double(samples.count) / Double(count)).rounded(.up))
+        var result = stride(from: 0, to: samples.count, by: step).map { samples[$0] }
+        if let last = samples.last, result.last?.t != last.t { result.append(last) }
+        return result
+    }
+
     private func chart(samples: [ChargeSample], end: Date) -> some View {
-        Chart {
-            ForEach(samples, id: \.t) { sample in
+        let plotted = Self.thin(samples)
+        return Chart {
+            ForEach(plotted, id: \.t) { sample in
                 AreaMark(x: .value("时间", sample.t), y: .value("电量", sample.p))
                     .foregroundStyle(Color.accentColor.opacity(0.12))
                     .interpolationMethod(.monotone)

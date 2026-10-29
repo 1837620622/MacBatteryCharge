@@ -67,6 +67,9 @@ final class AppModel: ObservableObject {
     private var lastValidIntervals: [Interval]
     private var timer: Task<Void, Never>?
     private var refreshing = false
+    private var refreshStartedAt: Date?
+    private var writingSince = Date.distantPast
+    private var forecastAt = Date.distantPast
     private var refreshAgain = false
     private var writingLimit = false
     private var failedWrite: (limit: Int, at: Date)?
@@ -164,11 +167,13 @@ final class AppModel: ObservableObject {
 
     func refresh() {
         guard !preview else { return }
-        if refreshing {
+        // 读数超过 30 秒还没回来，就当它卡住了，再读一次，免得一卡住界面就再也不动。
+        if refreshing, let started = refreshStartedAt, Date().timeIntervalSince(started) < 30 {
             refreshAgain = true
             return
         }
         refreshing = true
+        refreshStartedAt = Date()
         let age: TimeInterval = windowVisible ? 20 : 600
         Task.detached(priority: .utility) {
             let value = SystemReaders.read(lowPowerAge: age)
@@ -211,7 +216,7 @@ final class AppModel: ObservableObject {
         updateDischarge()
         recomputeForecast()
         if decision.reason == .heat && !previousHeat {
-            notify("heat", "电池偏热，先停在 80%", "降到 37°C 以下再按时间表继续。")
+            notify("heat", "电池偏热，先停在 80%", "降到 33°C 以下再按时间表继续。")
         }
 
         let flow = battery.flow
@@ -252,10 +257,12 @@ final class AppModel: ObservableObject {
     /// 换段、临时充满、提前放开、过热保护都在这里写给系统。不要密码。
     /// 系统设置里被改过也会改回时间表的值。
     private func autoApplyLimit() {
-        guard !preview, !writingLimit, let current = reading?.chargeLimit.value, current != decision.limit else { return }
+        guard !preview, let current = reading?.chargeLimit.value, current != decision.limit else { return }
+        if writingLimit, Date().timeIntervalSince(writingSince) < 30 { return }
         let limit = decision.limit
         if let failed = failedWrite, failed.limit == limit, Date().timeIntervalSince(failed.at) < 300 { return }
         writingLimit = true
+        writingSince = Date()
         Task {
             let error = await Task.detached { ChargeBridge.write(limit) }.value
             writingLimit = false
@@ -278,40 +285,56 @@ final class AppModel: ObservableObject {
         return helper.protocolVersion != HelperInfo.protocolVersion || helper.version != Installation.version
     }
 
-    var helperInstallable: Bool { HelperInstaller.bundledBinary != nil && SystemReaders.isAppleSilicon }
+    /// Apple 芯片和 Intel 的安装包各带一份对应的帮手。
+    var helperInstallable: Bool { HelperInstaller.bundledBinary != nil }
 
     /// 这一段开着放电，但帮手没装好。
     var dischargeWantedButMissing: Bool {
         battery.present && schedule.discharge(at: minute) && !helperUsable
     }
 
-    /// 系统没有原生充电上限时，上限交给帮手直接停充。
+    /// 系统没有原生充电上限时（旧系统、Intel），上限交给帮手：直接停充，或者写 Intel 的 BCLM。
     private var helperHandlesLimit: Bool {
-        guard let helper, !helperOutdated, helper.chargeControl == .direct else { return false }
+        guard let helper, !helperOutdated else { return false }
+        guard helper.chargeControl == .direct || helper.chargeControl == .intelCeiling else { return false }
         return reading?.chargeLimit.isSupported != true
     }
+
+    /// 今天不放电：只管当天，过了午夜自动恢复。
+    var dischargeOffToday: Bool { settings.dischargeOffDay == Self.dayKey(Date()) }
+
+    func toggleDischargeOffToday() {
+        settings.dischargeOffDay = dischargeOffToday ? nil : Self.dayKey(Date())
+        updateDischarge()
+        syncHelper()
+        onStatusChange?()
+    }
+
+    static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
 
     private func updateDischarge() {
         let external = battery.externalConnected || helper?.adapterEnabled == false
         discharging = ChargePolicy.shouldDischarge(
             previous: discharging, percent: battery.percent, decision: decision,
-            enabled: helperUsable && schedule.discharge(at: minute), external: external)
+            enabled: helperUsable && schedule.discharge(at: minute) && !dischargeOffToday,
+            external: external, resumeAt: schedule.resumeAt(at: minute))
     }
 
-    /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效，每次刷新续一次；程序退出或崩了，电源自己接回来。
+    /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效：放电时 20 秒续一次；平时每 5 分钟报一次到，
+    /// 帮手才知道程序还在，原生以外的上限才会一直保留。
     private func syncHelper() {
         guard !preview, !syncingHelper, let current = helper, !helperOutdated else { return }
         let wantedLimit = helperHandlesLimit ? decision.limit : nil
         let wantedTarget = discharging ? decision.limit : nil
+        let wantedResume = discharging ? schedule.resumeAt(at: minute) : nil
         let same = current.limit == wantedLimit && current.dischargeTo == wantedTarget
-        if same && wantedTarget == nil { return }
-        // 放电指令 2 分钟有效，20 秒续一次就够，窗口开着每 2 秒读一次时不必每次都发。
-        if same, Date().timeIntervalSince(lastHelperSend) < 20 { return }
+        let interval: TimeInterval = discharging ? 20 : 300
+        if same, Date().timeIntervalSince(lastHelperSend) < interval { return }
         lastHelperSend = Date()
         syncingHelper = true
         lastSentLimit = wantedLimit
         Task {
-            let request = HelperRequest(cmd: .apply, limit: wantedLimit, dischargeTo: wantedTarget, lease: 120)
+            let request = HelperRequest(cmd: .apply, limit: wantedLimit, dischargeTo: wantedTarget, resumeAt: wantedResume, lease: 120)
             let status = await Task.detached { HelperClient.send(request) }.value
             syncingHelper = false
             if let status { helper = status }
@@ -364,7 +387,10 @@ final class AppModel: ObservableObject {
 
     // MARK: 预测
 
-    private func recomputeForecast() {
+    /// 预测每 30 秒算一次就够了，电量曲线不需要每 2 秒重算。
+    private func recomputeForecast(force: Bool = false) {
+        if !force, Date().timeIntervalSince(forecastAt) < 30 { return }
+        forecastAt = Date()
         guard battery.present, let percent = battery.percent else {
             if !forecast.isEmpty { forecast = [] }
             return
@@ -373,7 +399,7 @@ final class AppModel: ObservableObject {
             schedule: schedule, minute: minute, percent: percent,
             external: battery.externalConnected || adapterCut,
             deadline: settings.deadlineEnabled ? settings.deadline : nil, chargeRate: learnedRate,
-            dischargeAvailable: helperUsable,
+            dischargeAvailable: helperUsable && !dischargeOffToday,
             topUpMinutes: topUpUntil.map { max(0, Int($0.timeIntervalSince(now) / 60)) },
             horizon: 480)
     }
@@ -405,7 +431,7 @@ final class AppModel: ObservableObject {
             }
         }
         recompute()
-        recomputeForecast()
+        recomputeForecast(force: true)
         onStatusChange?()
         scheduleSave()
         if !preview && settings.intervals != old.intervals { autoApplyLimit() }
@@ -492,7 +518,7 @@ final class AppModel: ObservableObject {
             topUpUntil = Date().addingTimeInterval(Double(ahead) * 60)
         }
         recompute()
-        recomputeForecast()
+        recomputeForecast(force: true)
         onStatusChange?()
         autoApplyLimit()
     }
@@ -728,6 +754,55 @@ final class AppModel: ObservableObject {
 
     // MARK: 文字
 
+    /// 窗口上那一句话：今天的时间表。
+    var daySummary: String {
+        schedule.dayLine(deadline: settings.deadlineEnabled ? settings.deadline : nil)
+    }
+
+    /// 出问题时复制给开发者。只有这台机器的读数和帮手状态，没有账号和个人信息。
+    func diagnosticsText() -> String {
+        let battery = battery
+        let limitText: String
+        switch reading?.chargeLimit {
+        case .current(let value)?: limitText = "系统上限 \(value)%"
+        case .unsupported(let text)?: limitText = "系统上限 不支持（\(text)）"
+        default: limitText = "系统上限 未读到"
+        }
+        let helperText: String
+        if let helper {
+            helperText = "帮手 \(helper.version)，协议 \(helper.protocolVersion)，断电控制 \(helper.adapterControl)，充电控制 \(helper.chargeControl.rawValue)，错误 \(helper.error ?? "无")"
+        } else {
+            helperText = "帮手 没装，或者连不上"
+        }
+        return [
+            "充电上限 \(Installation.version)",
+            "系统 \(ProcessInfo.processInfo.operatingSystemVersionString)",
+            "机型 \(Self.modelIdentifier())",
+            "芯片 \(SystemReaders.isAppleSilicon ? "Apple 芯片" : "Intel")",
+            "电量 \(battery.percent.map { "\($0)%" } ?? "未读到")，\(battery.flow.menuWord)",
+            "循环 \(battery.cycles.map(String.init) ?? "未读到")，健康 \(battery.health.map { "\($0)%" } ?? "未读到")",
+            "温度 \(battery.celsius.map { String(format: "%.1f°C", $0) } ?? "未读到")",
+            limitText,
+            helperText,
+            "时间表 \(daySummary)",
+        ].joined(separator: "\n")
+    }
+
+    func copyDiagnostics() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(diagnosticsText(), forType: .string)
+        message = Message(tone: .success, text: "诊断信息已复制，可以直接贴给开发者。")
+    }
+
+    private static func modelIdentifier() -> String {
+        var size = 0
+        guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return "未知" }
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else { return "未知" }
+        return String(cString: buffer)
+    }
+
     static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -834,6 +909,6 @@ final class AppModel: ObservableObject {
         self.history = history
         self.minute = minute
         recompute()
-        recomputeForecast()
+        recomputeForecast(force: true)
     }
 }

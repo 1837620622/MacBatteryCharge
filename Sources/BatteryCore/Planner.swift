@@ -52,23 +52,37 @@ public enum ChargePolicy {
         return decision
     }
 
-    /// 放电最低到这里，帮手那边也守着同一个下限。
+    /// 放电最低到这里。低于它就不再断开电源，帮手那边也守着同一个下限（Calma 也是 20%）。
     public static let dischargeFloor = 20
+    /// 没有漂移时，电量要超过上限这么多才开始放。苹果的上限会停在“几个百分点”之内，
+    /// 留出这一段，免得 80 和 82 之间反复放、反复充。
+    public static let dischargeMargin = 3
+    /// 苹果给的工作温度上限是 35°C。超过就停止往上充，降到 33°C 才恢复。
+    public static let heatOn = 35.0
+    public static let heatOff = 33.0
 
-    /// 这一段开着放电、接着电源、电量比上限高 2% 起开始放；放到上限就停。
-    /// 临时充满、断电前充满、过热保护、空档都不放电。external 要把「帮手已经断开电源」也算作接着电源。
-    public static func shouldDischarge(previous: Bool, percent: Int?, decision: LimitDecision,
-                                       enabled: Bool, external: Bool) -> Bool {
-        guard enabled, external, let percent, decision.reason == .schedule else { return false }
-        let target = max(decision.limit, dischargeFloor)
-        return previous ? percent > target : percent > target + 1
+    /// 开始放的电量和停下接电的电量。没有漂移：超过上限 dischargeMargin 才开始，放到上限就接电。
+    /// 有漂移：到上限就开始，掉到 resumeAt 才接电，电量就在两者之间漂。
+    public static func dischargeWindow(limit: Int, resumeAt: Int) -> (start: Int, resume: Int) {
+        let resume = max(min(resumeAt, limit), dischargeFloor)
+        let start = resume < limit ? limit : limit + dischargeMargin
+        return (start, resume)
     }
 
-    /// 40°C 起保护，降到 37°C 以下或拔掉电源才解除，中间保持上一次的状态，免得来回跳。
+    /// 这一段开着放电、接着电源（包括帮手已经断开电源）时才放。过热保护、临时充满、断电前充满、空档都不放。
+    public static func shouldDischarge(previous: Bool, percent: Int?, decision: LimitDecision,
+                                       enabled: Bool, external: Bool, resumeAt: Int? = nil) -> Bool {
+        guard enabled, external, let percent, decision.reason == .schedule, decision.limit < 100 else { return false }
+        let window = dischargeWindow(limit: decision.limit, resumeAt: resumeAt ?? decision.limit)
+        if percent <= dischargeFloor { return false }
+        return previous ? percent > window.resume : percent >= window.start
+    }
+
+    /// 超过 35°C 开始保护，降到 33°C 以下才解除，中间保持上一次的状态，免得来回跳。
     public static func heatActive(previous: Bool, celsius: Double?, external: Bool) -> Bool {
         guard external, let celsius else { return false }
-        if celsius >= 40 { return true }
-        if celsius <= 37 { return false }
+        if celsius >= heatOn { return true }
+        if celsius <= heatOff { return false }
         return previous
     }
 }

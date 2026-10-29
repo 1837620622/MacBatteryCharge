@@ -24,7 +24,7 @@ struct HelperCard: View {
         FoldCard("放电帮手", key: "helper", defaultOpen: model.helper == nil, summary: summary) {
             HStack(spacing: 6) {
                 Text(line).font(.callout)
-                InfoButton(text: "一个以 root 运行的小程序，需要放电时才断开电源适配器，最低放到 20%。睡眠、退出或 2 分钟没收到软件的指令，都会自己接回电源。只认你这个用户，不联网。只支持 Apple 芯片。")
+                InfoButton(text: "一个以 root 运行的小程序，需要放电时才断开电源适配器，最低放到 20%。睡眠、退出或 2 分钟没收到软件的指令，都会自己接回电源。只认你这个用户，不联网。Apple 芯片和 Intel 都支持，Intel 用它设 BCLM 上限。")
                 Spacer(minLength: 0)
             }
             if let error = model.helper?.error {
@@ -36,7 +36,7 @@ struct HelperCard: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(model.helperBusy || !model.helperInstallable)
                     if !model.helperInstallable {
-                        Text(SystemReaders.isAppleSilicon ? "这份软件里没有帮手" : "只支持 Apple 芯片")
+                        Text("这份软件里没有帮手")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -67,7 +67,7 @@ struct SmartCard: View {
             }
             Divider()
             ToggleRow(title: "过热保护",
-                      info: "接着电源且电池到 40°C 时先停在 80%，降到 37°C 以下再按时间表。",
+                      info: "接着电源、电池到 35°C 时先停在 80%，降到 33°C 再按时间表。",
                       isOn: $model.settings.heatProtection)
             Divider()
             ToggleRow(title: "通知",
@@ -166,6 +166,7 @@ struct SystemCard: View {
             HStack(spacing: 8) {
                 Button("再看引导") { model.replayGuide() }
                 Spacer()
+                Button("复制诊断") { model.copyDiagnostics() }
                 Button("卸载…", role: .destructive) { model.uninstall() }
                 Button("退出") { NSApp.terminate(nil) }
             }

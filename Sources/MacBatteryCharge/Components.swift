@@ -57,7 +57,7 @@ struct Tile: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .contentTransition(.numericText())
+                .numericTextTransition()
                 .animation(.easeOut(duration: 0.25), value: value)
             Text(note ?? " ")
                 .font(.caption2)
@@ -205,47 +205,6 @@ struct LiquidDisc: View, Animatable {
     }
 }
 
-/// 电量圆盘：液体盘、外圈、中间的大数字。
-struct LiquidRing: View {
-    var percent: Int?
-    var limit: Int
-    var flow: PowerFlow
-    var live: Bool
-
-    private var tint: Color {
-        guard let percent else { return .secondary }
-        switch flow {
-        case .charging: return .green
-        case .discharging: return percent <= 20 ? .red : (percent <= 40 ? .orange : .accentColor)
-        default: return .accentColor
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            Circle().fill(Color.primary.opacity(0.06))
-            LiquidDisc(level: Double(percent ?? 0) / 100, limit: limit, tint: tint, flow: flow, live: live)
-                .clipShape(Circle())
-                .animation(.easeInOut(duration: 0.9), value: percent)
-            Circle().strokeBorder(Color.primary.opacity(0.18), lineWidth: 1)
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(percent.map(String.init) ?? "—")
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.3), value: percent)
-                if percent != nil {
-                    Text("%").font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
-                }
-            }
-            .shadow(color: Color(nsColor: .windowBackgroundColor).opacity(0.7), radius: 3)
-        }
-        .frame(width: 104, height: 104)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(percent.map { "电量 \($0)%，上限 \(limit)%" } ?? "没有电池")
-    }
-}
-
 /// 一条会流动的线：圆点沿着线走，方向就是电流的方向。
 struct FlowLane: View {
     var active: Bool
@@ -307,7 +266,7 @@ struct FlowStrip: View {
                 .font(.caption2)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
+                .numericTextTransition()
                 .animation(.easeOut(duration: 0.25), value: caption)
         }
         .frame(width: 54)

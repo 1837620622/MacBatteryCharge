@@ -30,7 +30,7 @@ iconutil -c icns "$ICONSET" -o "$ROOT/build/AppIcon.icns"
 build_app() {
     local arch="$1"
     local label="$2"
-    local triple="${arch}-apple-macosx14.0"
+    local triple="${arch}-apple-macosx13.0"
     local app="$ROOT/build/$label/MacBatteryCharge.app"
 
     swift build -c release --triple "$triple"

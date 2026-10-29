@@ -82,6 +82,16 @@ struct PreviewWallpaper: View {
 }
 
 extension View {
+    /// 数字变化时滚动过去（macOS 14 起）。更早的系统直接换掉，不影响读数。
+    @ViewBuilder
+    func numericTextTransition() -> some View {
+        if #available(macOS 14, *) {
+            self.contentTransition(.numericText())
+        } else {
+            self
+        }
+    }
+
     /// 玻璃卡片：macOS 26 起是系统的 Liquid Glass，更早的系统用超薄材质。
     @ViewBuilder
     func glassSurface(cornerRadius: CGFloat = 14) -> some View {
