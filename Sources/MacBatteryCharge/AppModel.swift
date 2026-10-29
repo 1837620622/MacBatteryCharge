@@ -95,12 +95,13 @@ final class AppModel: ObservableObject {
     private var lastSentLimit: Int?
     private var lastHelperSend = Date.distantPast
 
-    init(preview: Bool = false, previewMode: ChargeMode? = nil) {
+    init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
         let loaded = preview ? AppSettings() : AppSettings.load()
         var start = loaded
         // 只给截图用：不写回设置文件。
         if let previewMode { start.mode = previewMode }
+        if let previewLanguage { start.language = previewLanguage }
         // 界面语言在画出第一个字之前就要定下来，否则会先闪一下中文。
         Lang.current = start.language
         if preview { start.guideSeen = true }

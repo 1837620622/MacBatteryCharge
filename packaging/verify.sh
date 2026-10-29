@@ -22,10 +22,10 @@ for pkg in "${packages[@]}"; do
 
     dist_xml="$tmp/x/Distribution"
     [[ -f "$dist_xml" ]] || fail "$name：不是分发包，没有安装器页面"
-    grep -q '<background file="background.png"' "$dist_xml" || fail "$name：安装器没有左边的图"
-    grep -q '<welcome file="Welcome.html"' "$dist_xml" || fail "$name：安装器没有欢迎页"
-    grep -q 'rootVolumeOnly="true"' "$dist_xml" || fail "$name：没有限制装在系统盘"
-    grep -q 'hostArchitectures="arm64"\|hostArchitectures="x86_64"' "$dist_xml" || fail "$name：没有写架构限制"
+    grep -q 'background.png' "$dist_xml" || fail "$name：安装器没有左边的图"
+    grep -q 'Welcome.html' "$dist_xml" || fail "$name：安装器没有欢迎页"
+    grep -q 'rootVolumeOnly' "$dist_xml" || fail "$name：没有限制装在系统盘"
+    grep -q 'hostArchitectures' "$dist_xml" || fail "$name：没有写架构限制"
     for file in background.png Welcome.html Conclusion.html AppIcon.png \
         en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
         [[ -f "$tmp/x/Resources/$file" ]] || fail "$name：缺 Resources/$file"

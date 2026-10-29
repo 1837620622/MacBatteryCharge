@@ -115,7 +115,7 @@ build_app() {
     local host_arch="x86_64"
     [[ "$arch" == arm64 ]] && host_arch="arm64"
     sed -e "s/__VERSION__/$VERSION/g" -e "s/__ARCH__/$host_arch/g" packaging/distribution.xml > "$work/distribution.xml"
-    plutil -lint "$work/distribution.xml" >/dev/null
+    xmllint --noout "$work/distribution.xml"
     local resources="$work/resources"
     mkdir -p "$resources"
     cp -R "$INSTALLER/." "$resources/"

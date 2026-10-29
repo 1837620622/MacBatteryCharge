@@ -20,30 +20,34 @@ enum Snapshot {
         var ok = true
         func file(_ name: String) -> URL { directory.appendingPathComponent(name) }
 
-        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+        // 中文和英文各一套，README 里中文用中文截图，英文用英文截图。
+        for language in [AppLanguage.zh, AppLanguage.en] {
+            let tag = language == .zh ? "zh" : "en"
             for mode in ChargeMode.allCases {
-                let model = sampleModel(mode: mode)
-                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
-                            to: file("main-\(mode.rawValue)-\(name).png")) && ok
+                let model = sampleModel(mode: mode, language: language)
+                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .aqua,
+                            to: file("main-\(mode.rawValue)-\(tag).png")) && ok
             }
-            let model = sampleModel(mode: .smart)
-            ok = render(SettingsView(model: model), size: NSSize(width: 460, height: 640), appearance: appearance,
-                        to: file("settings-\(name).png")) && ok
-            ok = render(GuideView(model: model), size: NSSize(width: 460, height: 430), appearance: appearance,
-                        to: file("guide-\(name).png")) && ok
-            ok = render(islandPreview(model: model, expanded: true), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: file("island-expanded-\(name).png")) && ok
-            ok = render(islandPreview(model: model, expanded: false), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: file("island-ears-\(name).png")) && ok
-            ok = writeMenuBar(to: file("menubar-\(name).png")) && ok
+            let model = sampleModel(mode: .smart, language: language)
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .darkAqua,
+                        to: file("main-smart-dark-\(tag).png")) && ok
+            ok = render(SettingsView(model: model), size: NSSize(width: 460, height: 640), appearance: .aqua,
+                        to: file("settings-\(tag).png")) && ok
+            ok = render(GuideView(model: model), size: NSSize(width: 460, height: 430), appearance: .aqua,
+                        to: file("guide-\(tag).png")) && ok
+            ok = render(islandPreview(model: model, expanded: true), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
+                        to: file("island-expanded-\(tag).png")) && ok
+            ok = render(islandPreview(model: model, expanded: false), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
+                        to: file("island-ears-\(tag).png")) && ok
         }
+        ok = writeMenuBar(to: file("menubar.png")) && ok
         return ok
     }
 
     /// 假数据：80% 接着电源，有半年的记录，学到的拔电时间是 18:40 前后。
     @MainActor
-    static func sampleModel(mode: ChargeMode) -> AppModel {
-        let model = AppModel(preview: true, previewMode: mode)
+    static func sampleModel(mode: ChargeMode, language: AppLanguage = .en) -> AppModel {
+        let model = AppModel(preview: true, previewMode: mode, previewLanguage: language)
         let now = Calendar.current.date(bySettingHour: 14, minute: 10, second: 0, of: Date()) ?? Date()
 
         var battery = BatterySnapshot()

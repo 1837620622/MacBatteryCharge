@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>充电上限 · 宣传片</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1220; }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background:
+      radial-gradient(1100px 680px at 72% 28%, rgba(10, 132, 255, 0.28), rgba(10, 132, 255, 0) 70%),
+      radial-gradient(900px 600px at 18% 82%, rgba(48, 209, 88, 0.14), rgba(48, 209, 88, 0) 70%),
+      #0b1220;
+    font-family: "Inter", "WenQuanYi Zen Hei", "Noto Sans CJK SC", sans-serif;
+    color: #f5f7fb;
+  }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .abs { position: absolute; }
+  .center { left: 0; right: 0; text-align: center; }
+  h1 { margin: 0; font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; }
+  .title { font-size: 104px; }
+  .head { font-size: 92px; }
+  .sub { font-size: 40px; color: #a9bbd6; line-height: 1.4; }
+  .body { font-size: 34px; color: #c3d0e6; line-height: 1.5; }
+  .tag { font-size: 30px; color: #7f93b4; letter-spacing: 0.02em; }
+  .frame {
+    position: absolute; border-radius: 28px; overflow: hidden;
+    box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.10);
+    background: #111827;
+  }
+  .frame img { display: block; width: 100%; height: 100%; }
+  .card {
+    position: absolute; width: 500px; height: 540px; top: 340px; border-radius: 36px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 30px 80px rgba(0,0,0,0.35);
+    padding: 52px 52px; box-sizing: border-box;
+  }
+  .pill { display: inline-block; font-size: 26px; padding: 8px 18px; border-radius: 999px; background: rgba(10,132,255,0.22); color: #9cc8ff; font-weight: 600; }
+  .dot { position: absolute; width: 22px; height: 22px; border-radius: 50%; }
+  .ring { position: absolute; }
+  .clock { font-size: 74px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile {
+    position: absolute; width: 380px; height: 250px; border-radius: 30px; top: 360px;
+    background: rgba(255,255,255,0.07); box-shadow: 0 0 0 1px rgba(255,255,255,0.10);
+    padding: 40px 36px; box-sizing: border-box;
+  }
+  .tile .big { font-size: 46px; font-weight: 700; margin-top: 18px; }
+  .tile .small { font-size: 28px; color: #a9bbd6; margin-top: 10px; line-height: 1.4; }
+  .bar { position: absolute; height: 22px; border-radius: 11px; }
+  .tick { position: absolute; top: 0; width: 2px; height: 14px; background: rgba(255,255,255,0.35); }
+  .ticklab { position: absolute; font-size: 22px; color: #7f93b4; transform: translateX(-50%); }
+  .screen { position: absolute; inset: 0; background: linear-gradient(160deg, #3a4f9c 0%, #6a4fb8 45%, #1b2b56 100%); }
+  .menubar { position: absolute; left: 0; right: 0; top: 0; height: 38px; background: rgba(20,22,28,0.72); }
+  .notch { position: absolute; left: 50%; top: 0; width: 226px; height: 38px; transform: translateX(-50%); background: #000; border-radius: 0 0 14px 14px; }
+  .cursor { position: absolute; }
+  .ripple { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.9); }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 1 开场 -->
+  <div class="scene" id="s1">
+    <img class="abs" id="logo" src="AppIcon.png" style="left:810px; top:250px; width:300px; height:300px; border-radius: 66px; box-shadow: 0 30px 80px rgba(10,132,255,0.35);">
+    <h1 class="abs title center" id="s1title" style="top:600px;"></h1>
+    <div class="abs sub center" id="s1sub" style="top:735px;"></div>
+  </div>
+
+  <!-- 2 问题 -->
+  <div class="scene" id="s2">
+    <h1 class="abs head center" id="s2head" style="top:150px;"></h1>
+    <svg class="abs" style="left:660px; top:330px;" width="600" height="600" viewBox="0 0 600 600">
+      <circle cx="300" cy="300" r="250" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="44"/>
+      <circle id="s2ring" cx="300" cy="300" r="250" fill="none" stroke="#ff9f0a" stroke-width="44" stroke-linecap="round"
+              transform="rotate(-90 300 300)" stroke-dasharray="1570.8" stroke-dashoffset="0"/>
+    </svg>
+    <div class="abs center clock" id="s2clock" style="top:540px; font-size:120px;"></div>
+    <div class="abs sub center" id="s2sub" style="top:955px;"></div>
+  </div>
+
+  <!-- 3 平时 80% -->
+  <div class="scene" id="s3">
+    <div class="abs" style="left:150px; top:300px; width:900px;">
+      <div class="pill" id="s3pill"></div>
+      <h1 class="head" id="s3head" style="margin-top:34px;"></h1>
+      <div class="sub" id="s3sub" style="margin-top:34px;"></div>
+      <div class="body" id="s3body" style="margin-top:46px;"></div>
+    </div>
+    <div class="frame" id="s3frame" style="left:1080px; top:150px; width:440px; height:800px;">
+      <img src="" id="s3img" alt="">
+    </div>
+  </div>
+
+  <!-- 4 记住习惯 -->
+  <div class="scene" id="s4">
+    <h1 class="abs head center" id="s4head" style="top:120px;"></h1>
+    <div class="abs sub center" id="s4sub" style="top:255px;"></div>
+    <div id="s4axis"></div>
+    <div class="abs" id="s4callout" style="left:0; right:0; top:855px; text-align:center;"></div>
+  </div>
+
+  <!-- 5 三种模式 -->
+  <div class="scene" id="s5">
+    <h1 class="abs head center" id="s5head" style="top:120px;"></h1>
+    <div class="abs sub center" id="s5sub" style="top:250px;"></div>
+    <div class="card" id="c1" style="left:150px;"></div>
+    <div class="card" id="c2" style="left:710px;"></div>
+    <div class="card" id="c3" style="left:1270px;"></div>
+  </div>
+
+  <!-- 6 刘海灵动岛 -->
+  <div class="scene" id="s6">
+    <div class="screen" id="s6screen"></div>
+    <div class="menubar" id="s6bar"></div>
+    <div class="notch" id="s6notch"></div>
+    <img class="abs" id="s6island" src="island-expanded-dark-clear.png" style="left:760px; top:0; width:400px; height:190px; opacity:0;">
+    <div class="ripple" id="s6ripple" style="left:960px; top:19px; opacity:0;"></div>
+    <svg class="cursor" id="s6cursor" style="left:0; top:0;" width="40" height="44" viewBox="0 0 40 44">
+      <path d="M2 2 L2 34 L11 26 L17 40 L23 37 L17 24 L30 24 Z" fill="#ffffff" stroke="#111" stroke-width="2"/>
+    </svg>
+    <div class="abs center" id="s6caption" style="top:820px;"></div>
+    <div class="abs center sub" id="s6sub" style="top:920px;"></div>
+  </div>
+
+  <!-- 7 信任 -->
+  <div class="scene" id="s7">
+    <h1 class="abs head center" id="s7head" style="top:130px;"></h1>
+    <div class="tile" id="t1" style="left:150px;"></div>
+    <div class="tile" id="t2" style="left:565px;"></div>
+    <div class="tile" id="t3" style="left:980px;"></div>
+    <div class="tile" id="t4" style="left:1395px;"></div>
+  </div>
+
+  <!-- 8 行动 -->
+  <div class="scene" id="s8">
+    <img class="abs" src="AppIcon.png" style="left:760px; top:220px; width:220px; height:220px; border-radius: 50px; box-shadow: 0 30px 80px rgba(10,132,255,0.35);">
+    <h1 class="abs head center" id="s8head" style="top:500px;"></h1>
+    <div class="abs sub center" id="s8sub" style="top:640px;"></div>
+    <div class="abs center" id="s8url" style="top:760px; font-size:44px; font-weight:700; color:#9cc8ff;"></div>
+    <div class="abs center tag" id="s8tag" style="top:850px;"></div>
+  </div>
+
+</div>
+
+<script>
+const LANG = (new URLSearchParams(location.search).get('lang')) || 'zh';
+const COPY = {
+  zh: {
+    s1title: '充电上限', s1sub: '离电之前，电已备好。',
+    s2head: '长时间满电，电池老得更快。', s2sub: '平时别一直挂在 100%。',
+    s3pill: '智能 · 平时', s3head: '平时停在 80%', s3sub: '日常上限可选 80、85、90、95。',
+    s3body: '不一直满电，电池更耐用。',
+    s4head: '它会记住你的习惯', s4sub: '每天第一次接着电源满 30 分钟后拔掉，就记作一次。',
+    s4callout: '记满 3 次，就能说出你平时几点拔电源，离电前把电备好。',
+    s5head: '三种模式，按你的用法选', s5sub: '窗口顶上一点就换。',
+    c1: ['智能', '平时停在 80%，离电前自动充到目标。', '推荐，大多数人用这个。'],
+    c2: ['固定', '一天分段，每段设一个上限。', '适合想自己排时间的人。'],
+    c3: ['一直充满', '接上电源就充到 100%。', '适合台式机。'],
+    s6caption: '点一下刘海，展开；再点一下，收回去。', s6sub: '插拔电源时它会自己弹出来。',
+    s7head: '安静，也不多要权限', t1: ['无需密码', '设置充电上限不问密码。'], t2: ['不需辅助功能', '不要屏幕录制，也不要输入监控。'],
+    t3: ['不上传数据', '电池记录只存在你这台 Mac 上。'], t4: ['免费开源', 'GPL-3.0，代码公开。'],
+    s8head: '现在就试试', s8sub: 'Apple 芯片和 Intel 都有安装包 · macOS 13 或更新',
+    s8url: 'github.com/1837620622/MacFullBar', s8tag: '在 Releases 下载 DMG 或 PKG'
+  },
+  en: {
+    s1title: 'Charge Limit', s1sub: 'Ready before you unplug.',
+    s2head: 'Sitting at 100% for hours ages a battery.', s2sub: 'Let it rest at a healthier level by day.',
+    s3pill: 'Smart · by day', s3head: 'Holds at 80% by day', s3sub: 'Daily limit: 80, 85, 90 or 95%.',
+    s3body: 'Not full all day, so the battery lasts longer.',
+    s4head: 'It learns your habits', s4sub: 'The first long plugged-in session each day that ends in an unplug counts.',
+    s4callout: 'After three, it knows when you usually unplug, and tops up before then.',
+    s5head: 'Three modes, pick your way', s5sub: 'Switch at the top of the window.',
+    c1: ['Smart', 'Holds by day, tops up before you unplug.', 'Recommended for most people.'],
+    c2: ['Fixed', 'Split the day into blocks, each with a limit.', 'For a schedule you set yourself.'],
+    c3: ['Always full', 'Charges to 100% whenever plugged in.', 'For desktops.'],
+    s6caption: 'Click the notch to open. Click again to close.', s6sub: 'It also pops out when you plug or unplug.',
+    s7head: 'Quiet, and it asks for little', t1: ['No password', 'Setting the limit never asks for one.'], t2: ['No accessibility', 'No screen recording, no input monitoring.'],
+    t3: ['Nothing uploaded', 'Battery records stay on this Mac.'], t4: ['Free & open source', 'GPL-3.0. The code is public.'],
+    s8head: 'Try it today', s8sub: 'Installers for Apple silicon and Intel · macOS 13 or later',
+    s8url: 'github.com/1837620622/MacFullBar', s8tag: 'Download the DMG or PKG from Releases'
+  }
+};
+const C = COPY[LANG] || COPY.zh;
+const BLUE = '#0a84ff', GREEN = '#30d158', ORANGE = '#ff9f0a';
+
+function setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
+function setHTML(id, value) { const el = document.getElementById(id); if (el) el.innerHTML = value; }
+function clamp(x) { return Math.max(0, Math.min(1, x)); }
+function ease(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+function prog(t, a, b) { return ease(clamp((t - a) / (b - a))); }
+function set(el, props) { if (!el) return; for (const k in props) el.style[k] = props[k]; }
+function fmt(minutes) { const h = Math.floor(minutes / 60), m = Math.floor(minutes % 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+
+function fillText() {
+  setText('s1title', C.s1title); setText('s1sub', C.s1sub);
+  setText('s2head', C.s2head); setText('s2sub', C.s2sub);
+  setText('s3pill', C.s3pill); setText('s3head', C.s3head); setText('s3sub', C.s3sub); setText('s3body', C.s3body);
+  setText('s4head', C.s4head); setText('s4sub', C.s4sub); setText('s4callout', C.s4callout);
+  setText('s5head', C.s5head); setText('s5sub', C.s5sub);
+  setText('s6caption', C.s6caption); setText('s6sub', C.s6sub);
+  setText('s7head', C.s7head);
+  setText('s8head', C.s8head); setText('s8sub', C.s8sub); setText('s8url', C.s8url); setText('s8tag', C.s8tag);
+  const cards = [['c1', C.c1], ['c2', C.c2], ['c3', C.c3]];
+  for (const [id, [title, line, note]] of cards) {
+    setHTML(id, '<div style="font-size:60px;font-weight:800;">' + title + '</div>' +
+      '<div style="font-size:34px;color:#c3d0e6;margin-top:34px;line-height:1.5;">' + line + '</div>' +
+      '<div style="font-size:28px;color:#7f93b4;margin-top:40px;line-height:1.5;">' + note + '</div>');
+  }
+  const tiles = [['t1', C.t1], ['t2', C.t2], ['t3', C.t3], ['t4', C.t4]];
+  for (const [id, [big, small]] of tiles) {
+    setHTML(id, '<div class="big">' + big + '</div><div class="small">' + small + '</div>');
+  }
+  // 24 小时时间轴：三天的拔电时间和备电区间
+  const axis = document.getElementById('s4axis');
+  const left = 360, width = 1200, top = 480;
+  const hours = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+  let html = '';
+  for (const h of hours) {
+    const x = left + width * h / 24;
+    html += '<div class="tick" style="left:' + x + 'px; top:' + (top + 230) + 'px;"></div>';
+    html += '<div class="ticklab" style="left:' + x + 'px; top:' + (top + 252) + 'px;">' + String(h).padStart(2, '0') + ':00</div>';
+  }
+  html += '<div class="abs" style="left:' + left + 'px; width:' + width + 'px; top:' + (top + 230) + 'px; height:2px; background: rgba(255,255,255,0.22);"></div>';
+  const days = [top + 40, top + 110, top + 180];
+  const unplugs = [18 * 60 + 40, 18 * 60 + 35, 18 * 60 + 45];
+  days.forEach((y, i) => {
+    html += '<div class="abs" style="left:' + left + 'px; width:' + width + 'px; top:' + (y + 14) + 'px; height:4px; background: rgba(255,255,255,0.08); border-radius:2px;"></div>';
+    html += '<div class="bar" id="day' + i + 'plug" style="left:' + left + 'px; top:' + y + 'px; width:0px; background:' + BLUE + '; opacity:0.85;"></div>';
+    html += '<div class="bar" id="day' + i + 'hold" style="left:' + (left + width * (17 * 60 + 20) / 1440) + 'px; top:' + y + 'px; width:0px; background:' + GREEN + ';"></div>';
+    html += '<div class="dot" id="day' + i + 'dot" style="left:' + (left + width * unplugs[i] / 1440 - 11) + 'px; top:' + (y - 9) + 'px; background:#fff; box-shadow: 0 0 0 6px rgba(255,255,255,0.12); opacity:0;"></div>';
+  });
+  axis.innerHTML = html;
+  // 时间轴的数据：白色点是拔电的时间；绿色是备电区间；蓝色是接电源的时段。
+  window.__days = { left, width, days, unplugs };
+  // 信任和模式卡片的图标点缀
+}
+
+function renderS1(t) {
+  const lt = t;
+  set(document.getElementById('logo'), { opacity: prog(lt, 0.2, 1.1), transform: 'scale(' + (0.86 + 0.14 * prog(lt, 0.2, 1.4)) + ')' });
+  set(document.getElementById('s1title'), { opacity: prog(lt, 1.0, 1.8), transform: 'translateY(' + (20 * (1 - prog(lt, 1.0, 1.8))) + 'px)' });
+  set(document.getElementById('s1sub'), { opacity: prog(lt, 1.8, 2.6), transform: 'translateY(' + (16 * (1 - prog(lt, 1.8, 2.6))) + 'px)' });
+}
+
+function renderS2(t) {
+  // 满电时间条：0 到 5 秒是 100%，之后慢慢放到 80%（只是示意，不是真的放电）。
+  const ring = document.getElementById('s2ring');
+  const circ = 1570.8;
+  const level = 1 - 0.0 * prog(t, 0.6, 1.6) - 0 * prog(t, 0.6, 1.6);
+  ring.setAttribute('stroke-dashoffset', String(circ * (1 - 1) ));
+  const minutes = 9 * 60 + 60 * 9 * prog(t, 0.4, 4.6);
+  setText('s2clock', fmt(minutes));
+  set(document.getElementById('s2head'), { opacity: prog(t, 0.2, 1.0), transform: 'translateY(' + (18 * (1 - prog(t, 0.2, 1.0))) + 'px)' });
+  set(document.getElementById('s2clock'), { opacity: prog(t, 0.6, 1.2) });
+  set(document.getElementById('s2sub'), { opacity: prog(t, 1.6, 2.4) });
+  set(ring, { opacity: prog(t, 0.4, 1.2) });
+}
+
+function renderS3(t) {
+  set(document.getElementById('s3pill'), { opacity: prog(t, 0.1, 0.8) });
+  set(document.getElementById('s3head'), { opacity: prog(t, 0.3, 1.1), transform: 'translateY(' + (20 * (1 - prog(t, 0.3, 1.1))) + 'px)' });
+  set(document.getElementById('s3sub'), { opacity: prog(t, 0.9, 1.7) });
+  set(document.getElementById('s3body'), { opacity: prog(t, 1.4, 2.2) });
+  const frame = document.getElementById('s3frame');
+  const k = prog(t, 0.2, 1.4);
+  set(frame, { opacity: k, transform: 'translateX(' + (80 * (1 - k)) + 'px)' });
+}
+
+function renderS4(t) {
+  set(document.getElementById('s4head'), { opacity: prog(t, 0.1, 0.9) });
+  set(document.getElementById('s4sub'), { opacity: prog(t, 0.6, 1.4) });
+  const { left, width, days, unplugs } = window.__days;
+  const holdStart = 17 * 60 + 20;
+  days.forEach((y, i) => {
+    const grow = prog(t, 1.0 + i * 0.35, 2.6 + i * 0.35);
+    const plugEnd = left + width * (unplugs[i] / 1440);
+    set(document.getElementById('day' + i + 'plug'), { width: (plugEnd - left) * grow + 'px' });
+    const holdLeft = left + width * (holdStart / 1440);
+    const holdWidth = (plugEnd - holdLeft) * prog(t, 2.2 + i * 0.35, 3.4 + i * 0.35);
+    set(document.getElementById('day' + i + 'hold'), { width: Math.max(0, holdWidth) + 'px' });
+    set(document.getElementById('day' + i + 'dot'), { opacity: prog(t, 2.6 + i * 0.35, 3.0 + i * 0.35) });
+  });
+  set(document.getElementById('s4callout'), { opacity: prog(t, 3.8, 4.8), transform: 'translateY(' + (16 * (1 - prog(t, 3.8, 4.8))) + 'px)' });
+}
+
+function renderS5(t) {
+  set(document.getElementById('s5head'), { opacity: prog(t, 0.1, 0.9) });
+  set(document.getElementById('s5sub'), { opacity: prog(t, 0.5, 1.2) });
+  ['c1', 'c2', 'c3'].forEach((id, i) => {
+    const k = prog(t, 0.8 + i * 0.25, 1.9 + i * 0.25);
+    const el = document.getElementById(id);
+    set(el, { opacity: k, transform: 'translateY(' + (40 * (1 - k)) + 'px)' });
+  });
+  const highlight = prog(t, 2.6, 3.4);
+  set(document.getElementById('c1'), { boxShadow: '0 0 0 ' + (2 + 4 * highlight) + 'px rgba(10,132,255,' + (0.9 * highlight) + '), 0 30px 80px rgba(0,0,0,0.35)' });
+}
+
+function renderS6(t) {
+  // 光标移到刘海，点击两次；展开、收起。
+  const cursor = document.getElementById('s6cursor');
+  const from = { x: 1560, y: 760 }, to = { x: 960, y: 22 };
+  const m = prog(t, 0.5, 1.7);
+  const x = from.x + (to.x - from.x) * m, y = from.y + (to.y - from.y) * m;
+  set(cursor, { transform: 'translate(' + x + 'px,' + y + 'px)' , opacity: prog(t, 0.2, 0.7) });
+  const press1 = t > 1.75 && t < 1.95;
+  const press2 = t > 4.4 && t < 4.6;
+  const rip = document.getElementById('s6ripple');
+  const ripT = t >= 1.7 ? clamp((t - 1.7) / 0.6) : 0;
+  const ripT2 = t >= 4.35 ? clamp((t - 4.35) / 0.6) : 0;
+  set(rip, { opacity: (t >= 1.7 && t < 2.3) ? 1 - ripT : (t >= 4.35 && t < 5.0 ? 1 - ripT2 : 0), transform: 'scale(' + (0.6 + 1.6 * (t >= 4.35 ? ripT2 : ripT)) + ')' });
+  // 展开：第一次点之后；收起：第二次点之后。
+  const expand = prog(t, 1.9, 2.5), collapse = prog(t, 4.6, 5.1);
+  const shown = expand * (1 - collapse);
+  set(document.getElementById('s6island'), { opacity: shown, transform: 'translateY(' + (-10 * (1 - shown)) + 'px)' });
+  const notch = document.getElementById('s6notch');
+  set(notch, { background: '#000' });
+  set(document.getElementById('s6caption'), { opacity: prog(t, 0.2, 1.0) });
+  set(document.getElementById('s6sub'), { opacity: prog(t, 5.4, 6.2) });
+  void press1; void press2;
+}
+
+function renderS7(t) {
+  set(document.getElementById('s7head'), { opacity: prog(t, 0.1, 0.9) });
+  ['t1', 't2', 't3', 't4'].forEach((id, i) => {
+    const k = prog(t, 0.6 + i * 0.22, 1.6 + i * 0.22);
+    set(document.getElementById(id), { opacity: k, transform: 'translateY(' + (34 * (1 - k)) + 'px)' });
+  });
+}
+
+function renderS8(t) {
+  set(document.querySelector('#s8 img'), { opacity: prog(t, 0.1, 0.9) });
+  set(document.getElementById('s8head'), { opacity: prog(t, 0.4, 1.2), transform: 'translateY(' + (18 * (1 - prog(t, 0.4, 1.2))) + 'px)' });
+  set(document.getElementById('s8sub'), { opacity: prog(t, 0.9, 1.7) });
+  set(document.getElementById('s8url'), { opacity: prog(t, 1.4, 2.2) });
+  set(document.getElementById('s8tag'), { opacity: prog(t, 1.9, 2.7) });
+}
+
+// 每个场景的起止时间（秒）。场景之间交叉淡入淡出 0.5 秒。
+const SCENES = [
+  { id: 's1', start: 0.0, end: 5.0, fn: renderS1 },
+  { id: 's2', start: 5.0, end: 11.0, fn: renderS2 },
+  { id: 's3', start: 11.0, end: 18.0, fn: renderS3 },
+  { id: 's4', start: 18.0, end: 26.0, fn: renderS4 },
+  { id: 's5', start: 26.0, end: 34.0, fn: renderS5 },
+  { id: 's6', start: 34.0, end: 41.0, fn: renderS6 },
+  { id: 's7', start: 41.0, end: 46.0, fn: renderS7 },
+  { id: 's8', start: 46.0, end: 52.0, fn: renderS8 },
+];
+const DURATION = 52.0;
+
+function render(t) {
+  for (const scene of SCENES) {
+    const el = document.getElementById(scene.id);
+    const fadeIn = clamp((t - scene.start) / 0.5);
+    const fadeOut = clamp((scene.end - t) / 0.5);
+    const alpha = Math.min(fadeIn, fadeOut);
+    el.style.opacity = t >= scene.start - 0.01 && t <= scene.end + 0.01 ? alpha : 0;
+    if (t >= scene.start - 0.01 && t <= scene.end + 0.01) scene.fn(t - scene.start);
+  }
+  return DURATION;
+}
+
+fillText();
+document.getElementById('s3img').src = 'main-smart-light.png';
+window.render = render;
+window.DURATION = DURATION;
+window.ready = true;
+</script>
+</body>
+</html>
