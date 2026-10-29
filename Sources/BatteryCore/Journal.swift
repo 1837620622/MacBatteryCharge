@@ -38,6 +38,8 @@ public struct DayRecord: Codable, Equatable, Sendable {
 
     /// 一天里有多少小时在用电池。
     public var batteryHours: Double { Double(batteryMinutes) / 60 }
+    /// 一天里有多少小时接着电源。
+    public var powerHours: Double { Double(powerMinutes) / 60 }
 }
 
 /// 长期记录。比 `ChargeHistory`（只留 72 小时）长得多，是「习惯」的来源。

@@ -95,7 +95,8 @@ public enum Log {
             let name = exception.name.rawValue
             let reason = exception.reason ?? ""
             let stack = exception.callStackSymbols.prefix(24).joined(separator: " | ")
-            write("crash", "\(name): \(reason) @ \(stack)")
+            // 闭包要写成 C 函数指针，里面不能隐式捕获 self（这里是类型本身），所以显式写 Log.write。
+            Log.write("crash", "\(name): \(reason) @ \(stack)")
         }
     }
 
