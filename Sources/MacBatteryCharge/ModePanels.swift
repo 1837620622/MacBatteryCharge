@@ -14,14 +14,7 @@ struct SmartPanel: View {
                 Text(T("平时停在这里，不一直满电。电池更耐用。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Picker(T("平时停在多少"), selection: dailyCapBinding) {
-                    ForEach(SmartPolicy.dailyCapChoices, id: \.self) { value in
-                        Text("\(value)%").tag(value)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: .infinity)
+                ChoiceBar(options: SmartPolicy.dailyCapChoices, title: { "\($0)%" }, selection: dailyCapBinding)
             }
 
             Card {
@@ -30,14 +23,7 @@ struct SmartPanel: View {
                 Text(T("在你平时拔电源之前，把电补到这个量。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Picker(T("拔电源时充到"), selection: $model.settings.unplugTarget) {
-                    ForEach(ChargePlanner.targetChoices, id: \.self) { value in
-                        Text("\(value)%").tag(value)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: .infinity)
+                ChoiceBar(options: ChargePlanner.targetChoices, title: { "\($0)%" }, selection: $model.settings.unplugTarget)
                 habitLine
                 DisclosureGroup(isExpanded: $showDetails) {
                     VStack(alignment: .leading, spacing: 10) {
@@ -105,13 +91,10 @@ struct FixedPanel: View {
                         .datePickerStyle(.compact)
                         .fixedSize()
                         .environment(\.locale, ClockPicker.locale)
-                    Picker(T("充到"), selection: $model.settings.unplugTarget) {
-                        ForEach(ChargePlanner.targetChoices, id: \.self) { value in
-                            Text("\(value)%").tag(value)
-                        }
+                    HStack(spacing: 10) {
+                        Text(T("充到"))
+                        ChoiceBar(options: ChargePlanner.targetChoices, title: { "\($0)%" }, selection: $model.settings.unplugTarget)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: .infinity)
                 }
             }
         }

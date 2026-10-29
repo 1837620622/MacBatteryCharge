@@ -57,13 +57,7 @@ struct RootView: View {
                     UpdateBanner(model: model)
                     tonightCard
                     curve
-                    Picker(T("模式"), selection: modeBinding) {
-                        ForEach(ChargeMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    ChoiceBar(options: ChargeMode.allCases, title: { $0.title }, selection: modeBinding)
                     Text(model.settings.mode.tagline)
                         .font(.callout)
                         .foregroundStyle(.secondary)
