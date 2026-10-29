@@ -21,6 +21,7 @@ struct RootView: View {
                         if let error = model.scheduleError {
                             MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
                         }
+                        tonightCard
                         Picker(T("模式"), selection: modeBinding) {
                             ForEach(ChargeMode.allCases, id: \.self) { mode in
                                 Text(mode.title).tag(mode)
@@ -28,6 +29,9 @@ struct RootView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+                        Text(model.settings.mode.tagline)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                         modePanel
                         footer
                     }
@@ -57,6 +61,8 @@ struct RootView: View {
                     .monospacedDigit()
                     .shadow(color: .black.opacity(0.25), radius: 2)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(diskLabel)
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.statusTitle)
                     .font(.title3.weight(.semibold))
@@ -82,6 +88,38 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 14)
+    }
+
+    /// 今晚的计划放在最上面：这是人最想知道的一句话，不用在别处找。
+    @ViewBuilder private var tonightCard: some View {
+        if let tonight = model.tonight {
+            let tint = tonightTint(tonight.tone)
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: tonight.symbol)
+                    .font(.title2)
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tonight.title)
+                        .font(.headline)
+                    Text(tonight.detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.1)))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func tonightTint(_ tone: AppModel.Message.Tone) -> Color {
+        switch tone {
+        case .info: return .accentColor
+        case .success: return .green
+        case .error: return .orange
+        }
     }
 
     @ViewBuilder private var modePanel: some View {
@@ -124,6 +162,11 @@ struct RootView: View {
 
     private var percentText: String {
         model.battery.percent.map { "\($0)%" } ?? "—"
+    }
+
+    /// 给 VoiceOver 读的一句：电量和现在的状态。
+    private var diskLabel: String {
+        model.battery.percent.map { T("电量 %@%，%@", ["\($0)", model.statusTitle]) } ?? model.statusTitle
     }
 
     private var ringColor: Color {

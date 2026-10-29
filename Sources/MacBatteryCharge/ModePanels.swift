@@ -1,19 +1,20 @@
 import SwiftUI
 import BatteryCore
 
-/// 智能：平时停在日常上限，记住平时几点拔电源，离电前自动备电。
+/// 智能：平时停在一个数字，拔电源前补到你要的量。习惯和细节收在下面，平时不用看。
 struct SmartPanel: View {
     @ObservedObject var model: AppModel
+    @State private var showDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Card {
-                Text(T("日常上限"))
+                Text(T("平时停在多少"))
                     .font(.headline)
                 Text(T("平时停在这里，不一直满电。电池更耐用。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Picker(T("日常上限"), selection: dailyCapBinding) {
+                Picker(T("平时停在多少"), selection: dailyCapBinding) {
                     ForEach(SmartPolicy.dailyCapChoices, id: \.self) { value in
                         Text("\(value)%").tag(value)
                     }
@@ -23,30 +24,39 @@ struct SmartPanel: View {
             }
 
             Card {
-                Text(T("离电前备电"))
+                Text(T("拔电源时要多少"))
                     .font(.headline)
-                habitLine
-                Toggle(T("记住我的充电习惯"), isOn: $model.settings.learnHabits)
-                Text(T("每天第一次长时间接着电源后拔掉，就记作一次。学满 %@ 次，就按平时的时间备电。", ["\(HabitJournal.minLearnCount)"]))
-                    .font(.caption)
+                Text(T("在你平时拔电源之前，把电补到这个量。"))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                Divider()
-                Picker(T("离电时充到"), selection: $model.settings.unplugTarget) {
+                Picker(T("拔电源时充到"), selection: $model.settings.unplugTarget) {
                     ForEach(ChargePlanner.targetChoices, id: \.self) { value in
                         Text("\(value)%").tag(value)
                     }
                 }
                 .pickerStyle(.segmented)
-                Toggle(T("还没学会时，按一个固定时间备电"), isOn: $model.settings.deadlineEnabled)
-                if model.settings.deadlineEnabled {
-                    DatePicker(T("默认拔电时间"), selection: ClockPicker.binding($model.settings.deadline),
-                               displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact)
-                        .fixedSize()
-                }
-                if model.learnedCount > 0 {
-                    Button(T("重新学习")) { model.forgetHabits() }
-                        .controlSize(.small)
+                habitLine
+                DisclosureGroup(isExpanded: $showDetails) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(T("记住我的充电习惯"), isOn: $model.settings.learnHabits)
+                        Text(T("每天第一次长时间接着电源后拔掉，就记作一次。记满 %@ 次，就按平时的时间来。", ["\(HabitJournal.minLearnCount)"]))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Toggle(T("还没学会时，先按一个固定时间"), isOn: $model.settings.deadlineEnabled)
+                        if model.settings.deadlineEnabled {
+                            DatePicker(T("平时拔电源的时间"), selection: ClockPicker.binding($model.settings.deadline),
+                                       displayedComponents: .hourAndMinute)
+                                .datePickerStyle(.compact)
+                                .fixedSize()
+                        }
+                        if model.learnedCount > 0 {
+                            Button(T("重新学习")) { model.forgetHabits() }
+                                .controlSize(.small)
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    Text(T("习惯和细节"))
                 }
             }
         }
@@ -61,7 +71,7 @@ struct SmartPanel: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else {
-            Text(T("已关闭学习，按下面的默认时间备电。"))
+            Text(T("已关闭学习，只按设定的时间来。"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -72,7 +82,7 @@ struct SmartPanel: View {
     }
 }
 
-/// 固定：按一天里的时间段排上限，外加断电前充满。
+/// 固定：按一天里的时间段排上限，外加拔电源前充满。
 struct FixedPanel: View {
     @ObservedObject var model: AppModel
 
@@ -81,13 +91,13 @@ struct FixedPanel: View {
             ScheduleEditor(model: model)
 
             Card {
-                Toggle(T("断电前充满"), isOn: $model.settings.deadlineEnabled)
-                Text(T("到这个时间之前，按时间表放开到下面的目标，好带着满电离开。"))
+                Toggle(T("拔电源前充满"), isOn: $model.settings.deadlineEnabled)
+                Text(T("到这个时间之前，按时间表提前开始补到下面的目标，好带着满电出门。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if model.settings.deadlineEnabled {
                     HStack(spacing: 12) {
-                        DatePicker(T("断电时间"), selection: ClockPicker.binding($model.settings.deadline),
+                        DatePicker(T("拔电源的时间"), selection: ClockPicker.binding($model.settings.deadline),
                                    displayedComponents: .hourAndMinute)
                             .datePickerStyle(.compact)
                             .fixedSize()

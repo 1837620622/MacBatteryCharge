@@ -2,6 +2,7 @@ import SwiftUI
 import BatteryCore
 
 /// 第一次打开时的三步引导。只说要用的，不放动画，读完点「开始使用」就关。
+/// 第二步顺便问一句平时几点拔电源，不靠猜。
 struct GuideView: View {
     @ObservedObject var model: AppModel
 
@@ -27,6 +28,10 @@ struct GuideView: View {
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if index == 1 {
+                            unplugQuestion
+                                .padding(.top, 6)
+                        }
                     }
                 }
             }
@@ -39,5 +44,22 @@ struct GuideView: View {
         }
         .padding(24)
         .frame(width: 460)
+    }
+
+    /// 问一句平时几点拔电源。先显示的是默认值，用户可以改，不用猜。
+    private var unplugQuestion: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Text(T("你平时大约几点拔电源？"))
+                DatePicker("", selection: ClockPicker.binding($model.settings.deadline),
+                           displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .fixedSize()
+            }
+            Text(T("随便填一个就行，之后会自己学。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }

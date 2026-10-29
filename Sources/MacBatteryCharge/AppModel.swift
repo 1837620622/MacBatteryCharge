@@ -835,7 +835,7 @@ final class AppModel: ObservableObject {
     }
 
     var limitLine: String {
-        var text = T("上限 %@%", ["\(decision.limit)"])
+        var text = T("停在 %@%", ["\(decision.limit)"])
         switch decision.reason {
         case .schedule, .gap:
             if discharging { text += T(" · 放电中") }
@@ -849,11 +849,11 @@ final class AppModel: ObservableObject {
                 text += T(" · 临时充满，拔掉电源时结束")
             }
         case .deadline:
-            text += T(" · 离电前放开")
+            text += T(" · 提前开始补")
         case .heat:
             text += T(" · 过热保护")
         case .smart:
-            text += T(" · 智能：平时 %@%", ["\(decision.scheduled)"])
+            break
         case .full:
             text += T(" · 一直充满")
         }
@@ -862,7 +862,7 @@ final class AppModel: ObservableObject {
 
     var tonight: Tonight? {
         let battery = battery
-        // 智能模式有学到的拔电时间就按它算；没学会时，只有开着「还没学会时，按一个固定时间备电」才用用户设的时间。
+        // 智能模式有学到的拔电时间就按它算；没学会时，只有开着「还没学会时，先按一个固定时间」才用用户设的时间。
         let fallback = settings.deadlineEnabled ? settings.deadline : nil
         guard battery.present, let percent = battery.percent,
               let deadline = (settings.mode == .smart ? learnedUnplug : nil) ?? fallback else { return nil }
@@ -883,27 +883,27 @@ final class AppModel: ObservableObject {
                                       rate: learnedRate, window: 1439)
         }
         guard let plan else { return nil }
-        let title = T("%@ 离电 · 目标 %@%", ["\(deadline.text)", "\(plan.target)"])
+        let title = T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.text)", "\(plan.target)"])
         if percent >= plan.target {
-            return Tonight(title: title, detail: T("已 %@%，到 %@% 了", ["\(percent)", "\(plan.target)"]), symbol: "checkmark.circle.fill", tone: .success)
+            return Tonight(title: title, detail: T("现在 %@%，已经够了", ["\(percent)"]), symbol: "checkmark.circle.fill", tone: .success)
         }
         // 没接电源就没有确定的时间可给：只能说到时候要充多久，不能说几点能满。
         if !battery.externalConnected && !adapterCut {
             return Tonight(title: title,
-                           detail: T("插上电源后约 %@ 充满", ["\(Self.duration(plan.minutesNeeded))"]),
+                           detail: T("插上电源，约 %@ 就能充满", ["\(Self.duration(plan.minutesNeeded))"]),
                            symbol: "powerplug", tone: .info)
         }
         if deadlineLift != nil {
             let eta = now.addingTimeInterval(Double(plan.minutesNeeded) * 60)
-            return Tonight(title: title, detail: T("已放开，预计 %@ 充满", ["\(Self.clock(eta))"]),
+            return Tonight(title: title, detail: T("已经开始补，预计 %@ 充满", ["\(Self.clock(eta))"]),
                            symbol: "bolt.badge.clock.fill", tone: .info)
         }
         let eta = now.addingTimeInterval(Double(plan.etaMinutes) * 60)
         if plan.reachesInTime {
-            return Tonight(title: title, detail: T("预计 %@ 充满，早 %@", ["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
+            return Tonight(title: title, detail: T("约 %@ 充满，离拔电源还有 %@", ["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
                            symbol: "moon.stars.fill", tone: .info)
         }
-        return Tonight(title: title, detail: T("来不及充到 %@%，点「临时充满」", ["\(plan.target)"]), symbol: "exclamationmark.triangle.fill", tone: .error)
+        return Tonight(title: title, detail: T("来不及充到 %@%，可以点「临时充满」", ["\(plan.target)"]), symbol: "exclamationmark.triangle.fill", tone: .error)
     }
 
     private func notify(_ id: String, _ title: String, _ body: String) {

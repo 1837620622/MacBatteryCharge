@@ -405,7 +405,7 @@ final class TextTests: XCTestCase {
         XCTAssertEqual(GuideCopy.bodies.count, 3)
         XCTAssertTrue(bodies.contains("刘海"), "引导讲到刘海")
         XCTAssertTrue(bodies.contains("智能"), "引导先讲智能模式")
-        XCTAssertTrue(bodies.contains("学满 3 次"), "引导讲学习习惯")
+        XCTAssertTrue(bodies.contains("记满 3 次"), "引导讲学习习惯")
         XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 60 }, "每步正文不超过 60 个字")
         XCTAssertFalse(bodies.contains("完全磁盘"), "引导不索要磁盘权限")
         XCTAssertFalse(bodies.contains("辅助功能"), "引导不索要辅助功能")
