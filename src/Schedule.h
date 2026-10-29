@@ -7,3 +7,5 @@ FOUNDATION_EXPORT int MBCCurrentMinute(void);
 FOUNDATION_EXPORT NSArray<NSDictionary *> *MBCDefaultIntervals(void);
 FOUNDATION_EXPORT BOOL MBCCompileIntervals(NSArray *items, int coverage[1440], NSString **error);
 FOUNDATION_EXPORT int MBCLimitAtMinute(const int coverage[1440], int minute, BOOL *gap);
+FOUNDATION_EXPORT NSString *MBCNormalizeLowPower(NSString *value);
+FOUNDATION_EXPORT NSString *MBCLowPowerAtMinute(NSArray *items, int minute);

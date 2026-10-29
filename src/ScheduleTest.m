@@ -1,4 +1,7 @@
+#import "BatteryInfo.h"
+#import "GuideView.h"
 #import "LoginItem.h"
+#import "MemoryInfo.h"
 #import "Schedule.h"
 #import "SystemPower.h"
 #import "UpdateCheck.h"
@@ -27,6 +30,10 @@ int main(void) {
         expect(limitAt(defaults, 20 * 60 + 59, &gap, &error) == 80 && !gap, @"20:59 应为 80");
         expect(limitAt(defaults, 21 * 60, &gap, &error) == 100 && !gap, @"21:00 应为 100");
         expect(limitAt(defaults, 23 * 60 + 30, &gap, &error) == 100 && !gap, @"23:30 应为 100");
+        expect([MBCLowPowerAtMinute(defaults, 10 * 60) isEqualToString:@"off"], @"白天默认不用低电量");
+        expect([MBCLowPowerAtMinute(defaults, 22 * 60) isEqualToString:@"battery"], @"晚间默认仅电池开低电量");
+        expect([MBCLowPowerAtMinute(defaults, 5 * 60) isEqualToString:@"battery"], @"清晨仍在晚间这一段");
+        expect([MBCNormalizeLowPower(@"nope") isEqualToString:@"off"], @"不认识的低电量选项按不用");
 
         int coverage[1440];
         expect(MBCCompileIntervals(defaults, coverage, &error), @"默认时间段应能通过");
@@ -69,6 +76,43 @@ int main(void) {
         expect([plist containsString:@"com.macbatterycharge.agent"], @"启动项要有标签");
         expect([plist containsString:@"/Applications/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"], @"启动项要指向程序");
         expect([plist containsString:@"<key>RunAtLoad</key><true/>"], @"启动项要在登录时运行");
+        expect([plist containsString:@"--background"], @"开机启动时不要弹出窗口");
+
+        NSString *ioreg = @"\"CurrentCapacity\" = 100\n\"InstantAmperage\" = 0\n\"Voltage\" = 12578\n"
+                          @"\"CycleCount\" = 618\n\"DesignCycleCount9C\" = 1000\n\"DesignCapacity\" = 5103\n"
+                          @"\"NominalChargeCapacity\" = 4229\n\"AppleRawMaxCapacity\" = 4096\n"
+                          @"\"Temperature\" = 3000\n\"TimeChargingThermallyLimited\" = 0\n"
+                          @"\"IsCharging\" = No\n\"ExternalConnected\" = Yes\n";
+        NSDictionary *report = MBCParseBatteryReport(ioreg, @"No thermal warning");
+        expect([report[@"health"] integerValue] == 83, @"健康度按标称容量四舍五入");
+        expect([report[@"decidegrees"] integerValue] == 3000, @"温度按百分度保存");
+        expect([report[@"rawMaxCapacity"] integerValue] == 4096, @"满充容量");
+        NSString *advice = MBCBatteryAdvice(report);
+        expect([advice containsString:@"没有过热"], @"没有过热警告");
+        expect([advice containsString:@"没有明显电流"], @"接通但没有电流");
+        expect([advice containsString:@"常见范围"], @"30°C 算常见温度");
+        NSString *details = [MBCBatteryDetailLines(report) componentsJoinedByString:@"\n"];
+        expect([details containsString:@"30.0"], @"温度显示成摄氏度");
+        expect([MBCMenuBarBottom(report) isEqualToString:@"接通"], @"菜单栏下排是接通");
+        expect([MBCMenuBarBottom(@{}) isEqualToString:@"无电池"], @"没有电池时下排写无电池");
+        expect([MBCBatteryAdvice(@{}) containsString:@"没有读到内置电池"], @"台式机不要装成有电池");
+
+        NSDictionary *memory = MBCMemoryReport(16ULL << 30, 16384, 1000, 2000, 500, 800, 100, 50, 1);
+        expect([memory[@"totalBytes"] unsignedLongLongValue] == (16ULL << 30), @"总内存照传入值");
+        expect([memory[@"usedBytes"] unsignedLongLongValue] == 2900ULL * 16384ULL, @"已用按活跃、联动和压缩估算");
+        expect([memory[@"pressure"] integerValue] == 1, @"压力等级保留");
+        expect([MBCMemoryAdvice(memory, @{@"milliamps": @0}) containsString:@"正常"], @"压力正常");
+        NSDictionary *tight = MBCMemoryReport(8ULL << 30, 4096, 10, 100000, 10, 100000, 50000, 0, 4);
+        expect([MBCMemoryAdvice(tight, @{@"milliamps": @(-400)}) containsString:@"放电"], @"放电且内存紧要一起说");
+
+        NSArray *titles = MBCGuideStepTitles();
+        NSString *bodies = [MBCGuideStepBodies() componentsJoinedByString:@"\n"];
+        expect(titles.count == 6 && MBCGuideStepBodies().count == 6, @"引导是六步");
+        expect([[titles componentsJoinedByString:@" "] containsString:@"刘海"], @"引导讲刘海");
+        expect([bodies containsString:@"管理员"], @"引导讲管理员密码");
+        expect([bodies containsString:@"不会为了降到 80%"], @"引导讲不会放电");
+        expect(![bodies containsString:@"完全磁盘"], @"引导不索要磁盘权限");
+        expect(![bodies containsString:@"辅助功能"], @"引导不索要辅助功能");
 
         if (failures) {
             fprintf(stderr, "%d failed\n", failures);

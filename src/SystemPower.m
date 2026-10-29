@@ -74,13 +74,15 @@ BOOL MBCReadLowPowerModes(NSInteger *batteryMode, NSInteger *acMode, NSString **
     return NO;
 }
 
-BOOL MBCApplyLowPowerPolicy(NSString **error) {
-    // pmset 写入需要管理员。系统会记住电池和电源两套配置，所以只在不一致时问一次密码。
+BOOL MBCApplyLowPowerModes(NSInteger batteryMode, NSInteger acMode, NSString **error) {
+    // 只接受开或关。系统分开记住电池和电源，数值没变就不弹密码。
+    if (batteryMode != 0 && batteryMode != 1) batteryMode = 0;
+    if (acMode != 0 && acMode != 1) acMode = 0;
     NSInteger battery = -1;
     NSInteger ac = -1;
-    if (MBCReadLowPowerModes(&battery, &ac, NULL) && battery == 1 && ac == 0) return YES;
+    if (MBCReadLowPowerModes(&battery, &ac, NULL) && battery == batteryMode && ac == acMode) return YES;
     int status = 0;
-    NSString *script = @"do shell script \"pmset -b lowpowermode 1; pmset -c lowpowermode 0\" with administrator privileges";
+    NSString *script = [NSString stringWithFormat:@"do shell script \"pmset -b lowpowermode %ld; pmset -c lowpowermode %ld\" with administrator privileges", (long)batteryMode, (long)acMode];
     NSString *output = MBCRunCommand(@"/usr/bin/osascript", @[@"-e", script], &status);
     if (status != 0) {
         if (error) *error = output.length ? output : @"没有获得管理员权限，低电量模式未改";

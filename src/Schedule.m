@@ -1,5 +1,7 @@
 #import "Schedule.h"
 
+static BOOL parseClock(NSString *text, int *minute);
+
 int MBCCurrentMinute(void) {
     NSDateComponents *parts = [[NSCalendar currentCalendar] components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:[NSDate date]];
     return (int)parts.hour * 60 + (int)parts.minute;
@@ -8,9 +10,33 @@ int MBCCurrentMinute(void) {
 NSArray<NSDictionary *> *MBCDefaultIntervals(void) {
     // 06:00 来电后停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
     return @[
-        @{@"start": @"06:00", @"end": @"21:00", @"limit": @80},
-        @{@"start": @"21:00", @"end": @"06:00", @"limit": @100},
+        @{@"start": @"06:00", @"end": @"21:00", @"limit": @80, @"lowPower": @"off"},
+        @{@"start": @"21:00", @"end": @"06:00", @"limit": @100, @"lowPower": @"battery"},
     ];
+}
+
+NSString *MBCNormalizeLowPower(NSString *value) {
+    if ([value isEqualToString:@"on"] || [value isEqualToString:@"battery"] || [value isEqualToString:@"off"]) return value;
+    return @"off";
+}
+
+static BOOL clockInRange(int minute, int start, int end) {
+    if (start < end) return minute >= start && minute < end;
+    return minute >= start || minute < end;
+}
+
+NSString *MBCLowPowerAtMinute(NSArray *items, int minute) {
+    if (minute < 0 || minute > 1439) minute = 0;
+    if (![items isKindOfClass:[NSArray class]]) return @"off";
+    for (id item in items) {
+        if (![item isKindOfClass:[NSDictionary class]]) continue;
+        int start = 0;
+        int end = 0;
+        if (!parseClock(((NSDictionary *)item)[@"start"], &start) || !parseClock(((NSDictionary *)item)[@"end"], &end)) continue;
+        if (start == end) continue;
+        if (clockInRange(minute, start, end)) return MBCNormalizeLowPower(((NSDictionary *)item)[@"lowPower"]);
+    }
+    return @"off";
 }
 
 static BOOL parseClock(NSString *text, int *minute) {

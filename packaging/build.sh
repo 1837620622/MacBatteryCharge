@@ -14,9 +14,10 @@ rm -rf build dist
 mkdir -p build dist
 
 clang -fobjc-arc -Wall -Wextra -Wno-unused-parameter \
-    -isysroot "$SDK" -mmacosx-version-min=14.0 \
-    -framework Foundation \
+    -isysroot "$SDK" -mmacosx-version-min=11.0 \
+    -framework Cocoa \
     src/Schedule.m src/ScheduleTest.m src/SystemPower.m src/Command.m src/LoginItem.m src/UpdateCheck.m \
+    src/BatteryInfo.m src/MemoryInfo.m src/GuideView.m \
     -o build/schedule_test
 ./build/schedule_test
 
@@ -42,10 +43,11 @@ build_app() {
     sed "s/__VERSION__/$VERSION/g" packaging/Info.plist > "$app/Contents/Info.plist"
     cp "$ROOT/build/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
     clang -fobjc-arc -Wall -Wextra -Wno-unused-parameter \
-        -target "$target" -isysroot "$SDK" -mmacosx-version-min=14.0 \
+        -target "$target" -isysroot "$SDK" -mmacosx-version-min=11.0 \
         -framework Cocoa \
         src/main.m src/AppController.m src/Schedule.m src/Command.m src/SystemPower.m \
         src/ChargeClient.m src/LoginItem.m src/UpdateCheck.m src/Settings.m \
+        src/BatteryInfo.m src/MemoryInfo.m src/GuideView.m \
         -o "$app/Contents/MacOS/MacBatteryCharge"
     local got
     got="$(lipo -archs "$app/Contents/MacOS/MacBatteryCharge")"
@@ -80,8 +82,8 @@ build_app() {
     echo "packed $label"
 }
 
-build_app arm64 arm64-apple-macos14.0 arm64
-build_app x86_64 x86_64-apple-macos14.0 intel
+build_app arm64 arm64-apple-macos11.0 arm64
+build_app x86_64 x86_64-apple-macos11.0 intel
 
 echo "dist:"
 ls -lh dist
