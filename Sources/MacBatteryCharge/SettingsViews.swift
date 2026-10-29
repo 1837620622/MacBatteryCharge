@@ -43,8 +43,9 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     if model.settings.look != .solid {
-                        Slider(value: $model.settings.transparency, in: AppSettings.transparencyRange) {
+                        HStack(spacing: 8) {
                             Text(T("透明度"))
+                            Slider(value: $model.settings.transparency, in: AppSettings.transparencyRange)
                         }
                     }
                 }

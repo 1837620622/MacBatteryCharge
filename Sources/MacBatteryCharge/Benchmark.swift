@@ -76,7 +76,7 @@ enum Benchmark {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
-        let model = Snapshot.sampleModel()
+        let model = Snapshot.sampleModel(mode: .smart)
         model.windowVisible = true
         let hosting = NSHostingView(rootView: RootView(model: model))
         hosting.sizingOptions = []

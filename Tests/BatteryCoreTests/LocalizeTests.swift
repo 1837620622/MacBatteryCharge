@@ -33,6 +33,21 @@ final class LocalizeTests: XCTestCase {
         XCTAssertEqual(T(chinese), chinese)
     }
 
+    /// 繁體中文走自己的表；没有翻译的句子仍然回落中文。
+    func testTraditionalUsesItsOwnTable() {
+        Lang.current = .zhHant
+        XCTAssertEqual(T("正在充电"), Table.traditional["正在充电"])
+        XCTAssertNotEqual(Table.traditional["正在充电"], "正在充电", "繁體要真的不一样")
+        XCTAssertEqual(T("这是一句故意没翻译的话"), "这是一句故意没翻译的话")
+    }
+
+    /// 每一句繁体和简体的占位符数量要一样，不然替换会错位。
+    func testTraditionalKeepsPlaceholders() {
+        for (chinese, traditional) in Table.traditional {
+            XCTAssertEqual(chinese.components(separatedBy: "%@").count, traditional.components(separatedBy: "%@").count, chinese)
+        }
+    }
+
     /// 占位符按顺序替换。
     func testPlaceholdersFillInOrder() {
         Lang.current = .zh

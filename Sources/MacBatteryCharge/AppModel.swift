@@ -303,7 +303,6 @@ final class AppModel: ObservableObject {
         guard let percent = value.battery.percent, value.battery.present else { return }
         let sample = ChargeSample(t: value.date, p: percent, c: value.battery.flow == .charging,
                                   x: value.battery.externalConnected, l: decision.limit)
-        let previous = history.samples.last
         history.add(sample)
         // 长期记录按「天」累加。帮手断开电源时系统说没接电源，这里按真实状态记，
         // 否则一边接电源放电的日子会被记成整天用电池。
@@ -840,6 +839,8 @@ final class AppModel: ObservableObject {
             text += T(" · 过热保护")
         case .smart:
             text += T(" · 智能：平时 %@%", ["\(decision.scheduled)"])
+        case .full:
+            text += T(" · 一直充满")
         }
         return text
     }
