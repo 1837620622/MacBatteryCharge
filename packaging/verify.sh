@@ -40,9 +40,9 @@ for pkg in "${packages[@]}"; do
     app_info="$(find "$tmp/x" -path '*/MacBatteryCharge.app/Contents/Info.plist' -print -quit)"
     [[ -n "$app_info" ]] || fail "${name}：包里没有 MacBatteryCharge.app"
     app="$(dirname "$(dirname "$app_info")")"
-    [[ -f "$app/Resources/AppIcon.icns" ]] || fail "${name}：应用里没有 AppIcon.icns"
+    [[ -f "$app/Contents/Resources/AppIcon.icns" ]] || fail "${name}：应用里没有 AppIcon.icns"
     for lang in en zh-Hans zh-Hant; do
-        [[ -f "$app/Resources/$lang.lproj/InfoPlist.strings" ]] || fail "${name}：应用缺 $lang 的名字"
+        [[ -f "$app/Contents/Resources/$lang.lproj/InfoPlist.strings" ]] || fail "${name}：应用缺 $lang 的名字"
     done
     echo "✓ ${name}：安装器页面、应用图标和三种语言都在"
     rm -rf "$tmp"
