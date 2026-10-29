@@ -1,76 +1,64 @@
-# MacBatteryCharge
+# 充电上限
 
-MacBook 充电上限定时切换，按这套作息：
+Mac 菜单栏里的充电设置。点菜单栏图标打开窗口，在窗口里改时间段、低电量模式、登录启动、更新和卸载。
 
-- **06:00 市电来电**：充电上限设为 **80%**。白天插着电，停在 80% 附近。
-- **21:00**：充电上限设为 **100%**。用 21:00 到 23:30 这 2.5 小时，把电从大约 80% 补上去。
-- **23:30 市电断电**：此时开始用电池写代码。上限保持 100%，自己接上外置充电宝后可以继续充到 100%。
+不使用快捷指令，不打包源代码。GitHub Actions 只上传装好就能用的 PKG 和 DMG。
 
-使用 Apple 系统原生的“将充电上限设为”快捷指令，不修改 SMC，不安装第三方电池驱动，不请求 root 权限。
+充电上限走系统自己的电池接口，和「系统设置 → 电池」是同一处。低电量模式走系统的电源配置。软件空闲时只留一个原生窗口，没有网页运行时。
 
-> **适用条件：** Apple 芯片 MacBook、macOS 26.4 或更新版本。21:00 把上限改成 100%，并不保证 21:00 那一刻就满电；电脑必须还接着市电，才会开始补电。**本项目不主动放电**。若早上插电时电量已经高于 80%，改成 80% 不会把电量放下来，只会停止继续往上充。
+## 默认作息
 
-80% 充到 100% 是整段充电里最慢的一段，常见要 1 到 2 小时，机器正在使用或充电器功率较低时更久。原先 22:30 才放开，到 23:30 断电只剩 1 小时，经常补不满。所以补电起点放在 **21:00**。
+| 时间 | 充电上限 |
+|---|---|
+| 06:00–20:59 | 80% |
+| 21:00–次日 05:59 | 100% |
 
-## 新建 GitHub 仓库并自动构建
+06:00 市电来了以后，电充到 80% 就停。21:00 把上限改成 100%，到 23:30 断电前大约有两个半小时可以把电补上去。23:30 之后如果接上充电宝，上限仍是 100%，可以继续充。
 
-1. 在 GitHub 新建一个**空仓库**，例如 `MacBatteryCharge`。不要勾选创建 README、`.gitignore` 或许可证（这些文件已在本项目里）。
-2. 下载并解压提供的**仓库源码 ZIP**，打开其中 `MacBatteryCharge-GitHub` 文件夹，在这个文件夹内执行下面的命令。把 `<你的用户名>` 替换成你的 GitHub 用户名：
+这些时间能在窗口里改。结束时间早于开始时间，表示这一段跨过午夜。没被任何一段盖住的时间按 100%。时间段不能重叠。
 
-   ```bash
-   git init -b main
-   git add -A
-   git commit -m "Initial MacBatteryCharge release"
-   git remote add origin https://github.com/<你的用户名>/MacBatteryCharge.git
-   git push -u origin main
-   ```
+电量如果已经高于上限，软件不会把电放下来，只会停止继续往上充。
 
-3. 进入仓库的 **Actions** 页。如果出现启用工作流提示，按 GitHub 提示启用。推送到 `main` 后，工作流 `Build macOS battery charge installer` 将自动启动；也可以点 `Run workflow` 手动触发。
-4. 工作流成功后，可在仓库 **Releases** 下载 `MacBatteryCharge-macOS-Installer.zip`；也可以在该次 Actions 运行页面的 **Artifacts** 下载。
-5. 解压安装包，双击 **`安装.command`**，按提示在快捷指令应用里点击两次“添加快捷指令”。导入完成后，安装器自动创建并启用两个时间点的定时任务。
-6. 完成后双击 **`检查状态.command`** 查看日志，再到“系统设置 → 电池”核对充电上限是否真的改变。
+## 低电量模式
 
-**提醒：** 快捷指令必须由已登录 iCloud 的 Mac 签名。GitHub 的 macOS runner 没有 iCloud，直接签名会被 Apple 拒绝。因此仓库 `signed/` 里放的是本机用 `shortcuts sign --mode anyone` 签好的文件，Actions 只做检查、打包和发布。改了快捷指令内容后，先在 Mac 上重新签名，再把 `signed/` 一起提交。
+勾选后：用电池时打开低电量模式，接通电源后关闭。
 
-## 安装后如何运行
+系统把电池和电源分成两套设置来记。所以只在当前系统和这里不一致时，才要输入一次管理员密码。密码框是 macOS 自己的，软件看不到密码。
 
-| 本机时间 | 市电 | 充电上限 | 实际含义 |
-|---|---|---|---|
-| 06:00–20:59 | 有 | 80% | 来电后允许充到 80%，然后停住 |
-| 21:00–23:30 | 有 | 100% | 断电前的补电窗口 |
-| 23:30–05:59 | 无 | 100% | 电池写代码；充电宝接入后可充到 100% |
+## 安装
 
-- 安装器会在 `~/Library/LaunchAgents` 中创建用户级 `launchd` 任务，定时执行系统 `shortcuts run`。无需保持 Terminal 打开，也无需自行设置 Mac 快捷指令“自动化”选项。
-- 两个触发点是 **06:00** 和 **21:00**。登录时会按当前时间校准。睡眠错过的日历触发通常在唤醒后补执行，并**以唤醒时当前时间**决定目标上限，避免执行过期的 80% / 100% 操作。设备关机时不会运行。
-- 23:30 没有单独的定时任务。市电断开是物理断电，软件不需要再切一次；上限从 21:00 起已经是 100%。
-- 需要用户处于登录会话；部分系统权限、锁屏或快捷指令设置仍可能阻止无交互运行。安装后必须在本机测试一次，并检查对应日志。
+从 [Releases](https://github.com/1837620622/MacBatteryCharge/releases) 下载，按这台 Mac 的芯片选文件。
 
-## 常用操作
+| 芯片 | 安装包 | 磁盘映像 |
+|---|---|---|
+| Apple 芯片 | `MacBatteryCharge-2.0.0-arm64.pkg` | `MacBatteryCharge-2.0.0-arm64.dmg` |
+| Intel | `MacBatteryCharge-2.0.0-intel.pkg` | `MacBatteryCharge-2.0.0-intel.dmg` |
 
-在下载的安装包中双击：
+PKG 双击后会装到“应用程序”。DMG 打开后把 `MacBatteryCharge.app` 拖进“应用程序”。
 
-- `安装.command`：导入两条中文快捷指令「白天充电上限80」「晚间充电上限100」，并安装 `launchd` 定时任务。
-- `立即校准.command`：立即按当前时间设定上限。
-- `检查状态.command`：检查是否安装、读取最近运行日志。
-- `卸载.command`：移除定时任务；不删除两个快捷指令，不修改当前电池上限。
+如果系统提示无法验证开发者，在访达里按住 Control 点软件，选“打开”。
 
-旧版通过快捷指令应用创建的 **06:30 / 14:30 / 22:30 自动化应先禁用或删除**，否则会与新定时器相互覆盖。电池的上限是系统设置，不是强制物理电源通断，也不是主动放电工具。
+装好后打开「充电上限」，看窗口里的当前状态，再点「立即应用」。然后打开「系统设置 → 电池」，确认充电上限已经变成这一时段该有的数字。
 
-## 开发与验证
+充电上限需要 Apple 芯片，以及 macOS 26.4 或更新版本。Intel 包可以安装，低电量模式和登录启动仍然可用；如果这台机器没有系统充电上限，窗口里会直接写出来。
 
-```bash
-python3 -m unittest discover -s tests -v
-python3 tools/charge_shortcuts.py --output build/unsigned
-bash -n scripts/*.command scripts/*.sh
-```
+## 窗口里有什么
 
-CI 检查 Bash 语法、1440 分钟的时间边界、快捷指令 plist 结构、Apple 签名及 ZIP 归档完整性。**CI 不会测试 MacBook 真实充电硬件**：GitHub runner 并不是有电池的 MacBook，因此签名或测试通过不等于实际电池上限已修改。
+- 当前电源、当前上限、低电量状态、这一时段的目标上限。
+- 时间段表格。选中一行后改开始、结束和上限。
+- 低电量模式开关。
+- 登录时打开。
+- 检查更新。发现新版本后可以打开发布页。
+- 卸载。去掉登录启动和本机配置，并删除“应用程序”里的软件。已经设好的充电上限和低电量模式不会被改回去。
 
-技术说明见 [docs/INSTALL.md](docs/INSTALL.md)。
+菜单栏图标旁边是这一时段的目标百分比。关掉窗口后软件还在，点菜单栏可以再打开。
 
-## 参考资料
+## 更新记录
 
-- [Apple：Mac 充电上限](https://support.apple.com/en-ie/102338)
-- [Apple：运行和签署快捷指令](https://support.apple.com/guide/shortcuts-mac/run-shortcuts-from-the-command-line-apd455c82f02/mac)
-- [Apple：launchd.plist 定时任务](https://github.com/apple-oss-distributions/launchd/blob/main/man/launchd.plist.5)
-- [GitHub：macos-26 runners](https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/)
+见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 开发
+
+Actions 在 macOS 上做这些事：时间段覆盖和重叠、版本号比较、电源文本解析、登录启动项文本，然后分别编译 Apple 芯片和 Intel，再打 PKG 和 DMG。
+
+Actions 上的机器没有 MacBook 电池，不能代替你在自己电脑上点「立即应用」之后看电池设置。
