@@ -81,11 +81,16 @@ struct ChargeCurve: View {
             context.fill(Path(ellipseIn: dot), with: .color(.accentColor))
         }
 
-        context.draw(Text(T("16 小时前")).font(.caption2).foregroundStyle(.secondary),
-                     at: CGPoint(x: 0, y: size.height), anchor: .bottomLeading)
-        context.draw(Text(T("现在")).font(.caption2).foregroundStyle(.secondary),
-                     at: CGPoint(x: x(0), y: size.height), anchor: .bottom)
-        context.draw(Text(T("之后 8 小时")).font(.caption2).foregroundStyle(.secondary),
-                     at: CGPoint(x: size.width, y: size.height), anchor: .bottomTrailing)
+        Self.caption(T("16 小时前"), in: &context, at: CGPoint(x: 0, y: size.height), anchor: .bottomLeading)
+        Self.caption(T("现在"), in: &context, at: CGPoint(x: x(0), y: size.height), anchor: .bottom)
+        Self.caption(T("之后 8 小时"), in: &context, at: CGPoint(x: size.width, y: size.height), anchor: .bottomTrailing)
+    }
+
+    /// 时间标签：小字，灰色。`Text.foregroundStyle` 只有 macOS 14 才有，我们最低支持 13，
+    /// 所以先 resolve 成 ResolvedText，再把颜色设在上面。
+    private static func caption(_ words: String, in context: inout GraphicsContext, at point: CGPoint, anchor: UnitPoint) {
+        var resolved = context.resolve(Text(words).font(.caption2))
+        resolved.shading = .color(.secondary)
+        context.draw(resolved, at: point, anchor: anchor)
     }
 }
