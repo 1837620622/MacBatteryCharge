@@ -112,6 +112,7 @@ enum HelperInstaller {
         let label = HelperInfo.label
         let script = [
             "set -e",
+            "/usr/bin/codesign --verify --strict \(Shell.quoted(binary.path))",
             "/bin/mkdir -p /Library/PrivilegedHelperTools",
             "/bin/launchctl bootout system/\(label) 2>/dev/null || true",
             "/bin/cp \(Shell.quoted(binary.path)) \(Shell.quoted(HelperInfo.installedBinary))",
