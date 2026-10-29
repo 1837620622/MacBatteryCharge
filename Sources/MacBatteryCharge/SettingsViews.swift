@@ -72,7 +72,7 @@ struct SettingsView: View {
 
                 Section(T("关于")) {
                     LabeledContent(T("版本"), value: Installation.version)
-                    Toggle(T("自动检查，并自动装上新版本"), isOn: $model.settings.autoCheckUpdates)
+                    Toggle(T("自动检查新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
                     Button(T("反馈问题")) { model.sendFeedback() }
                     Button(T("再看引导")) { model.replayGuide(); onClose() }
@@ -124,42 +124,31 @@ struct SettingsView: View {
             Text(T("已经是最新版。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .downloading(let release):
-            Text(T("正在下载新版本 %@", ["\(release.version)"]))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .waiting(let release, let reason):
-            Text(T("新版本 %@ 已经下好。%@", ["\(release.version)", reason]))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .installing(let release):
-            Text(T("正在换成新版本 %@，装完自动重新打开。", ["\(release.version)"]))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .restarting(let release):
-            Text(T("新版本 %@ 已经装好，正在重新打开。", ["\(release.version)"]))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .needsPassword(let release):
+        case .available(let release):
             VStack(alignment: .leading, spacing: 6) {
-                Text(T("新版本 %@ 已经下好，需要输入一次管理员密码才能换上。", ["\(release.version)"]))
+                Text(T("发现新版本 %@", ["\(release.version)"]))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button(T("输入密码，装上新版本")) { model.installWithPassword() }
-                    .controlSize(.small)
+                HStack(spacing: 8) {
+                    Button(T("下载新版本")) { model.openDownload(release) }
+                    Button(T("以后再说")) { model.dismissUpdate(release) }
+                }
+                .controlSize(.small)
             }
-        case .failed(let text, let release):
+        case .relaunching(let version):
+            Text(T("新版本 %@ 已经装好，正在重新打开。", ["\(version)"]))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed(let text):
             VStack(alignment: .leading, spacing: 6) {
                 Text(text)
                     .font(.caption)
                     .foregroundStyle(.orange)
-                if let release {
-                    HStack(spacing: 8) {
-                        Button(T("再试一次")) { model.downloadUpdate(release) }
-                        Button(T("去下载页面")) { model.openDownloadPage(release) }
-                    }
-                    .controlSize(.small)
+                HStack(spacing: 8) {
+                    Button(T("再试一次")) { model.checkForUpdates(userInitiated: true) }
+                    Button(T("去下载页面")) { model.openDownloadPage() }
                 }
+                .controlSize(.small)
             }
         }
         Button(T("立即检查")) { model.checkForUpdates(userInitiated: true) }

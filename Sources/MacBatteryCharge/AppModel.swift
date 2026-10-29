@@ -77,10 +77,8 @@ final class AppModel: ObservableObject {
     private var lastValidIntervals: [Interval]
     private var timer: Task<Void, Never>?
     private var updateTimer: Task<Void, Never>?
-    /// 下好了、等着装的那一版。
-    private var pendingPackage: (release: ReleaseInfo, file: URL)?
-    /// 放电时等一会儿再看能不能装。
-    private var installRetry: Task<Void, Never>?
+    /// 「应用程序」里装好的版本，第一次看到时记下来；下一次还是它，才说明安装包已经装完。
+    private var settledVersion: String?
     private var refreshing = false
     private var refreshStartedAt: Date?
     private var writingSince = Date.distantPast
@@ -190,13 +188,16 @@ final class AppModel: ObservableObject {
         updateTimer = makeUpdateTimer()
     }
 
-    /// 启动十秒后查一次，之后每小时看一眼；真正去查的间隔由 maybeCheckForUpdates 管，两次之间至少隔 6 小时。
+    /// 启动十秒后查一次更新。之后每分钟看一眼「应用程序」里装好的版本（你手动装上以后，旧版本会自己重新打开），每小时查一次更新。
     private func makeUpdateTimer() -> Task<Void, Never> {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
+            var minutes = 0
             while !Task.isCancelled {
-                self?.maybeCheckForUpdates()
-                try? await Task.sleep(for: .seconds(3600))
+                self?.watchInstalledVersion()
+                if minutes % 60 == 0 { self?.maybeCheckForUpdates() }
+                minutes += 1
+                try? await Task.sleep(for: .seconds(60))
             }
         }
     }
@@ -707,133 +708,71 @@ final class AppModel: ObservableObject {
 
     // MARK: 检查更新
 
-    /// 启动十秒后查一次，之后每 6 小时在后台查一次。查到新版本就自动下载、核对、安装，装完自己重新打开，不用点按钮。
-    /// 「应用程序」允许当前用户写入的时候不要密码；不允许的时候，设置和窗口里会请你点一次、输入一次密码。
-    /// 放电的时候不装（装的时候要退出再打开，放电会被打断），等放电结束。
+    /// 启动十秒后查一次，之后每 6 小时在后台查一次。查到新版本就提示你：窗口最上面和设置里各有一条。
+    /// 下载和安装都由你来：点「下载新版本」，在浏览器里下对应芯片的安装包，打开它就能装。软件不替你下、不替你装，也不要密码。
     func maybeCheckForUpdates() {
         guard !preview, settings.autoCheckUpdates else { return }
         if let last = settings.lastUpdateCheck, Date().timeIntervalSince(last) < 6 * 3600 { return }
         checkForUpdates(userInitiated: false)
     }
 
-    /// 「立即检查」和自动检查都走这里。查到的新版本马上开始自动更新。
+    /// 「立即检查」和自动检查都走这里。正在重新打开的时候，不动界面。
     func checkForUpdates(userInitiated: Bool) {
         guard !preview else { return }
-        if userInitiated, !updateBusy { update = .checking }
+        if case .relaunching = update { return }
+        if userInitiated { update = .checking }
         Task {
             do {
                 let release = try await UpdateCheck.fetchLatest()
                 settings.lastUpdateCheck = Date()
                 if AppVersion.isNewer(release.version, than: Installation.version) {
-                    offerUpdate(release)
-                } else if !updateBusy {
+                    // 自动检查时，点过「以后再说」的版本不再提示；手动检查照样显示。
+                    if userInitiated || settings.skippedVersion != release.version {
+                        update = .available(release)
+                    } else {
+                        update = .idle
+                    }
+                } else {
                     update = userInitiated ? .upToDate : .idle
                 }
             } catch {
-                if !updateBusy {
-                    update = userInitiated ? .failed(T("查不到新版本：%@", ["\(error.localizedDescription)"]), nil) : .idle
-                }
+                update = userInitiated ? .failed(T("查不到新版本：%@", ["\(error.localizedDescription)"])) : .idle
             }
         }
     }
 
-    /// 去发布页手动下。只在自动更新失败时，设置里才给这个后路。
-    func openDownloadPage(_ release: ReleaseInfo) {
-        NSWorkspace.shared.open(release.page ?? UpdateCheck.releasesPage)
+    /// 「下载新版本」：在浏览器里下对应芯片的安装包。找不到安装包时，去发布页。
+    func openDownload(_ release: ReleaseInfo) {
+        NSWorkspace.shared.open(release.package(arm64: UpdateCheck.isArm64)?.url ?? release.page ?? UpdateCheck.releasesPage)
     }
 
-    /// 正在处理的是哪一版（下载、等待、安装、需要密码都算）。
-    private var updateRelease: ReleaseInfo? {
-        switch update {
-        case .downloading(let release), .waiting(let release, _), .installing(let release),
-             .restarting(let release), .needsPassword(let release):
-            return release
-        default:
-            return nil
-        }
+    /// 去发布页看说明、手动下。
+    func openDownloadPage() {
+        NSWorkspace.shared.open(UpdateCheck.releasesPage)
     }
 
-    /// 正在处理的时候，检查不能把界面换掉。
-    private var updateBusy: Bool { updateRelease != nil }
-
-    /// 查到新版本：已经在处理同一版，就不重来；否则马上在后台下。
-    private func offerUpdate(_ release: ReleaseInfo) {
-        if updateRelease?.version == release.version { return }
-        downloadUpdate(release)
+    /// 「以后再说」：这一版不再提示，下一版出来照样提示。
+    func dismissUpdate(_ release: ReleaseInfo) {
+        settings.skippedVersion = release.version
+        update = .idle
     }
 
-    /// 在后台下安装包，核对过才算下好，然后马上装。只认这一版：中途换了版本，旧的结果不再写进界面。
-    func downloadUpdate(_ release: ReleaseInfo) {
-        guard let asset = release.package(arm64: AppUpdater.isArm64) else {
-            update = .failed(T("这个版本没有适合这台 Mac 的安装包。"), release)
+    /// 你手动装上新版本以后，正在跑的旧版本要自己重新打开，不用重启电脑。
+    /// 每分钟看一眼「应用程序」里装的版本；同一个版本连续两次都看到，才说明安装包已经装完。
+    private func watchInstalledVersion() {
+        guard !preview, Installation.isInApplications,
+              let installed = Installation.installedVersion(),
+              AppVersion.isNewer(installed, than: Installation.version) else {
+            settledVersion = nil
             return
         }
-        update = .downloading(release)
-        Task {
-            do {
-                let signature = release.assets.first { $0.name == asset.name + ".sig" }
-                let file = try await AppUpdater.download(asset, signature: signature)
-                guard updateRelease?.version == release.version else { return }
-                pendingPackage = (release, file)
-                installPendingIfSafe()
-            } catch {
-                if updateRelease?.version == release.version {
-                    update = .failed(error.localizedDescription, release)
-                }
-            }
-        }
-    }
-
-    /// 下好的安装包：放电时先等着，放电结束再装；能装就直接装。
-    private func installPendingIfSafe() {
-        guard let pending = pendingPackage else { return }
-        if discharging || helper?.discharging == true {
-            update = .waiting(pending.release, T("放电的时候不装，放电结束后自动装上。"))
-            scheduleInstallRetry()
+        guard settledVersion == installed else {
+            settledVersion = installed
             return
         }
-        installRetry?.cancel()
-        installRetry = nil
-        update = .installing(pending.release)
-        let background = !windowVisible
-        Task {
-            let outcome = await Task.detached { AppUpdater.install(pending.file, version: pending.release.version) }.value
-            finishInstall(outcome, release: pending.release, background: background)
-        }
-    }
-
-    /// 「应用程序」不让直接换，要管理员密码。用户点了按钮才弹一次密码框；装完自己重新打开。
-    func installWithPassword() {
-        guard let pending = pendingPackage else { return }
-        update = .installing(pending.release)
-        Task {
-            let outcome = await Task.detached { AppUpdater.installWithPassword(pending.file, version: pending.release.version) }.value
-            finishInstall(outcome, release: pending.release, background: false)
-        }
-    }
-
-    private func finishInstall(_ outcome: AppUpdater.Outcome, release: ReleaseInfo, background: Bool) {
-        switch outcome {
-        case .installed:
-            pendingPackage = nil
-            update = .restarting(release)
-            Installation.relaunchAfterExit(background: background)
-            NSApp.terminate(nil)
-        case .needsPassword:
-            update = .needsPassword(release)
-        case .failed(let text):
-            update = .failed(text, release)
-        }
-    }
-
-    /// 放电时每分钟看一眼，放电一结束就装。
-    private func scheduleInstallRetry() {
-        installRetry?.cancel()
-        installRetry = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(60))
-            guard !Task.isCancelled else { return }
-            self?.installPendingIfSafe()
-        }
+        update = .relaunching(installed)
+        Installation.relaunchAfterExit(background: !windowVisible)
+        NSApp.terminate(nil)
     }
 
     func dismissMessage() { message = nil }
@@ -906,7 +845,7 @@ final class AppModel: ObservableObject {
     /// 诊断正文：这台机器的读数，加上最近 120 行日志。
     private func feedbackBody() -> String {
         var lines = [
-            "版本：\(Installation.version)（\(AppUpdater.isArm64 ? "Apple 芯片" : "Intel")）",
+            "版本：\(Installation.version)（\(UpdateCheck.isArm64 ? "Apple 芯片" : "Intel")）",
             "系统：\(ProcessInfo.processInfo.operatingSystemVersionString)",
             "上限执行者：\(limitOwner)",
             "模式：\(settings.mode)",

@@ -23,33 +23,7 @@ jobs:
       - name: Test and package arm64 and Intel
         run: bash packaging/build.sh
 
-      # 更新签名：用 GitHub Secret UPDATE_SIGNING_KEY（私钥的 base64）给每个安装包签一个 .sig。
-      # 没设置就跳过（PR 或还没配密钥时）；发版那一步会检查，缺签名就不发。
-      - name: Sign update packages
-        id: sign
-        env:
-          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$UPDATE_SIGNING_KEY" ]]; then
-            echo "没有设置 UPDATE_SIGNING_KEY：这次不签名。发版前必须设置。"
-            exit 0
-          fi
-          for pkg in dist/*.pkg; do
-            # 先签到临时文件，签成功才改名：失败时不留下空的 .sig（发版那一步会看它在不在、是不是空的）。
-            sig="$(mktemp)"
-            if printf '%s' "$UPDATE_SIGNING_KEY" | swift packaging/sign-update.swift "$pkg" > "$sig"; then
-              mv "$sig" "$pkg.sig"
-              echo "已签名 $(basename "$pkg")"
-            else
-              rm -f "$sig"
-              exit 1
-            fi
-          done
-
-      # 签名失败也照样跑下面的检查：签名是发版的门槛（Publish 一步还会核对），检查和自检的结果不该被它挡住。
       - name: Idle CPU and memory
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
         run: |
           set -euo pipefail
           app="build/arm64/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
@@ -65,7 +39,6 @@ jobs:
           [[ $((rss / 1024)) -le 150 ]] || { echo "内存超过预算 150 MB"; exit 1; }
 
       - name: Window open CPU
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
         run: |
           set -euo pipefail
           app="build/arm64/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
@@ -73,7 +46,6 @@ jobs:
           "$app" --bench-live
 
       - name: Snapshots
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -83,7 +55,6 @@ jobs:
 
       # 自检：在真机器上走真实的代码路径，结果写进 snapshots 产物里。失败只标红，不挡住打包。
       - name: Self-test menu bar click
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
         continue-on-error: true
         run: |
           set -uo pipefail
@@ -96,35 +67,6 @@ jobs:
           wait "$pid" || true
           cat snapshots/selftest-menubar.txt || echo "没有生成菜单栏自检报告"
 
-      - name: Self-test update (verify signature, install, check version)
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          mkdir -p snapshots
-          arch=$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )
-          app="build/$arch/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
-          version="$(tr -d '[:space:]' < VERSION)"
-          status=0
-          "$app" --selftest-update "$PWD/snapshots/selftest-update.txt" --pkg "$PWD/dist/MacBatteryCharge-$version-$arch.pkg" --expect "$version" || status=$?
-          cat snapshots/selftest-update.txt || echo "没有生成更新自检报告"
-          exit "$status"
-
-      # 原地更新：在临时文件夹里模拟「应用程序」，用刚打好的安装包换一次，核对换上去的版本、备份和签名。
-      - name: Self-test in-place update (sandbox copy of Applications)
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          mkdir -p snapshots
-          arch=$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )
-          app="build/$arch/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
-          version="$(tr -d '[:space:]' < VERSION)"
-          status=0
-          "$app" --selftest-inplace "$PWD/snapshots/selftest-inplace.txt" --pkg "$PWD/dist/MacBatteryCharge-$version-$arch.pkg" --expect "$version" || status=$?
-          cat snapshots/selftest-inplace.txt || echo "没有生成原地更新自检报告"
-          exit "$status"
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -133,7 +75,6 @@ jobs:
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && steps.sign.outcome != 'skipped' }}
         with:
           name: MacBatteryCharge
           path: dist/*
@@ -154,7 +95,4 @@ jobs:
             echo "v$VERSION 已经发布过，跳过。要发新包请先改 VERSION。"
             exit 0
           fi
-          for pkg in dist/*.pkg; do
-            [[ -s "$pkg.sig" ]] || { echo "缺少签名（或签名是空的）：$pkg。先设置 UPDATE_SIGNING_KEY 再发版。"; exit 1; }
-          done
           gh release create "v$VERSION" dist/* --title "v$VERSION" --notes-file packaging/release-notes.md

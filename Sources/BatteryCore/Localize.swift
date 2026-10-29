@@ -81,6 +81,11 @@ public func T(_ chinese: String, _ arguments: [String]) -> String {
 public enum Table {
     /// 英文。
     public static let english: [String: String] = [
+        "发现新版本 %@": "New version %@ is available",
+        "下载新版本": "Download New Version",
+        "以后再说": "Later",
+        "自动检查新版本": "Check for new versions automatically",
+        "下载和安装都由你来：点「下载新版本」，在浏览器里下对应芯片的安装包，打开它就能装。装完旧版本会自己重新打开，设置和数据都保留。": "You download and install it yourself: click “Download New Version” to get the package for your chip in the browser, then open it. The old version reopens by itself afterward; your settings and data stay.",
         "问题反馈（%@）": "Feedback (%@)",
         "诊断信息太长，放不进网址。已经复制到剪贴板，在打开的页面里粘贴到正文就行。": "The diagnostics are too long for a link. They’re copied to the clipboard; paste them into the body of the page that opens.",
         "放电的时候不装，放电结束后自动装上。": "Not installing while discharging. It installs automatically once discharging ends.",
@@ -667,6 +672,11 @@ public enum Table {
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
     public static let traditional: [String: String] = [
+        "发现新版本 %@": "發現新版本 %@",
+        "下载新版本": "下載新版本",
+        "以后再说": "以後再說",
+        "自动检查新版本": "自動檢查新版本",
+        "下载和安装都由你来：点「下载新版本」，在浏览器里下对应芯片的安装包，打开它就能装。装完旧版本会自己重新打开，设置和数据都保留。": "下載和安裝都由你來：點「下載新版本」，在瀏覽器裡下載對應晶片的安裝包，打開它就能裝。裝完舊版本會自己重新打開，設定和資料都保留。",
         "问题反馈（%@）": "問題回饋（%@）",
         "诊断信息太长，放不进网址。已经复制到剪贴板，在打开的页面里粘贴到正文就行。": "診斷資訊太長，放不進網址。已經複製到剪貼簿，在打開的頁面裡貼到內文就行。",
         "放电的时候不装，放电结束后自动装上。": "放電的時候不裝，放電結束後自動裝上。",

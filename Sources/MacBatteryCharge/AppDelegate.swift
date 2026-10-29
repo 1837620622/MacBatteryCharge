@@ -56,11 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let launchedByAgent = CommandLine.arguments.contains("--background")
         Task.detached(priority: .utility) { LoginItem.removeLegacyAgent(launchedByAgent: launchedByAgent) }
         model.syncLogin()
-        // 上一版留下的东西（换版本时的备份、旧的临时文件）在这里收拾掉，不用重启电脑。
-        Task { @MainActor in
-            let notes = await Task.detached(priority: .utility) { Migration.run() }.value
-            notes.forEach { Log.write("info", $0) }
-        }
 
         if selfTestReport != nil {
             Task { @MainActor [weak self] in
