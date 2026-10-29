@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var island: NotchIsland?
     private var settingsSink: AnyCancellable?
     private var lastIconKey = ""
+    /// `--selftest-menubar 报告路径`：CI 用。有这个就不自动开窗口，改成模拟点击菜单栏图标，把结果写进报告后退出。
+    var selfTestReport: URL?
+    private var selfTestLines: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let background = LaunchContext.isBackgroundLaunch()
@@ -53,7 +56,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
         model.syncLogin()
 
-        if !background { showPopover() }
+        if selfTestReport != nil {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.runMenuBarSelfTest()
+            }
+        } else if !background {
+            showPopover()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -224,6 +234,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.windowVisible = false
         model.saveNow()
         model.editingID = nil
+    }
+
+    // MARK: 自检
+
+    /// 模拟用户点两次菜单栏图标，看弹窗开了、又收起来了。只给 CI 用。
+    private func runMenuBarSelfTest() {
+        let button = statusItem?.button
+        selfTestLines.append("状态栏图标在屏幕上：\(button?.window != nil ? "通过" : "失败")")
+        button?.performClick(nil)
+        selfTestLines.append("第一次点击后弹窗打开：\(popover?.isShown == true ? "通过" : "失败")")
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            self?.finishMenuBarSelfTest()
+        }
+    }
+
+    private func finishMenuBarSelfTest() {
+        let visible = popover?.contentViewController?.view.window?.isVisible == true
+        selfTestLines.append("弹窗窗口可见：\(visible ? "通过" : "失败")")
+        statusItem?.button?.performClick(nil)
+        selfTestLines.append("第二次点击后弹窗收起：\(popover?.isShown == true ? "失败" : "通过")")
+        let passed = !selfTestLines.contains { $0.hasSuffix("失败") }
+        selfTestLines.append(passed ? "结果：通过" : "结果：失败")
+        if let report = selfTestReport {
+            try? (selfTestLines.joined(separator: "\n") + "\n").write(to: report, atomically: true, encoding: .utf8)
+        }
+        NSApp.terminate(nil)
     }
 
     // MARK: 电源变化
