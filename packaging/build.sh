@@ -87,7 +87,7 @@ build_app() {
     for binary in "$app/Contents/MacOS/MacBatteryCharge" "$app/Contents/Helpers/MacBatteryChargeHelper"; do
         got="$(lipo -archs "$binary")"
         if [[ "$got" != "$arch" ]]; then
-            echo "架构不符：$binary 要 $arch，实际 $got"
+            echo "架构不符：$binary 要 ${arch}，实际 $got"
             exit 1
         fi
     done
