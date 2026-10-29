@@ -124,7 +124,9 @@ struct RootView: View {
     @ViewBuilder private var curve: some View {
         let samples = model.history.samples(since: Date().addingTimeInterval(-TimeInterval(ChargeCurve.pastMinutes * 60)))
         if !samples.isEmpty {
-            ChargeCurve(samples: samples, forecast: model.forecast, now: Date())
+            // 一直充满的页面内容最短，曲线画高到正好填满底下的空白。
+            ChargeCurve(samples: samples, forecast: model.forecast, now: Date(),
+                        height: model.settings.mode == .full ? 190 : 96)
         }
     }
 
