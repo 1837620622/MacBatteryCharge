@@ -749,7 +749,8 @@ final class AppModel: ObservableObject {
         update = .downloading(release)
         Task {
             do {
-                let file = try await AppUpdater.download(asset)
+                let signature = release.assets.first { $0.name == asset.name + ".sig" }
+                let file = try await AppUpdater.download(asset, signature: signature)
                 if case .downloading(let current) = update, current.version == release.version {
                     update = .ready(release, file)
                 }

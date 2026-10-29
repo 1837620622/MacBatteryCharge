@@ -1,7 +1,8 @@
 import SwiftUI
 import BatteryCore
 
-/// 有新版本时放在主窗口最上面。下载、等你安装、正在装、没装成，都在这一块说清楚，只给一两个按钮。
+/// 有新版本时放在主窗口最上面。自动下载、等你安装、正在装、没装成，都在这一块说清楚。
+/// 这里不会把人领去网页上下载；失败了就写明原因，给「再试一次」。
 struct UpdateBanner: View {
     @ObservedObject var model: AppModel
 
@@ -11,8 +12,7 @@ struct UpdateBanner: View {
             card(title: T("正在下载新版本 %@", ["\(release.version)"]),
                  detail: T("在后台下载，下完会在这里提示你。"),
                  symbol: "arrow.down.circle.fill", tint: .accentColor) {
-                Button(T("去下载页面")) { model.openDownloadPage(release) }
-                    .controlSize(.small)
+                EmptyView()
             }
         case .ready(let release, _):
             card(title: T("新版本 %@ 已经下好", ["\(release.version)"]),
@@ -35,11 +35,8 @@ struct UpdateBanner: View {
             card(title: T("没能自动更新到 %@", ["\(release.version)"]),
                  detail: text,
                  symbol: "exclamationmark.triangle.fill", tint: .orange) {
-                HStack(spacing: 10) {
-                    Button(T("去下载页面")) { model.openDownloadPage(release) }
-                        .buttonStyle(.borderedProminent)
-                    Button(T("再试一次")) { model.downloadUpdate(release) }
-                }
+                Button(T("再试一次")) { model.downloadUpdate(release) }
+                    .buttonStyle(.borderedProminent)
             }
         default:
             EmptyView()

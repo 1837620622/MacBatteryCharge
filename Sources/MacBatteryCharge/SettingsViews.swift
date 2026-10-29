@@ -130,13 +130,9 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .ready(let release, _):
-            VStack(alignment: .leading, spacing: 6) {
-                Text(T("新版本 %@ 已经下好，到窗口里点「立即安装」。", ["\(release.version)"]))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button(T("去下载页面")) { model.openDownloadPage(release) }
-                    .controlSize(.small)
-            }
+            Text(T("新版本 %@ 已经下好，到窗口里点「立即安装」。", ["\(release.version)"]))
+                .font(.caption)
+                .foregroundStyle(.secondary)
         case .installing(let release):
             Text(T("正在安装 %@", ["\(release.version)"]))
                 .font(.caption)

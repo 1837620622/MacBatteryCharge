@@ -635,6 +635,10 @@ public enum Table {
         "装完了，但版本号对不上。": "Installation finished, but the version number doesn’t match.",
         "新版本 %@ 已经下好，到窗口里点「立即安装」。": "Version %@ is downloaded. Click “Install Now” in the window.",
         "自动检查，并在后台下好新版本": "Check for updates and download them in the background",
+        "这个版本没有签名，不能自动安装。": "This release has no signature, so it can’t be installed automatically.",
+        "签名对不上，没有安装。": "The signature doesn’t match. Nothing was installed.",
+        "签名文件格式不对，没有安装。": "The signature file is malformed. Nothing was installed.",
+        "应用里的公钥读不出来，不自动安装。": "The app’s public key can’t be read, so nothing will be installed automatically.",
     ]
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
@@ -1193,5 +1197,9 @@ public enum Table {
         "装完了，但版本号对不上。": "裝完了，但版本號對不上。",
         "新版本 %@ 已经下好，到窗口里点「立即安装」。": "新版本 %@ 已經下好，到視窗裡點「立即安裝」。",
         "自动检查，并在后台下好新版本": "自動檢查，並在背景下好新版本",
+        "这个版本没有签名，不能自动安装。": "這個版本沒有簽名，不能自動安裝。",
+        "签名对不上，没有安装。": "簽名對不上，沒有安裝。",
+        "签名文件格式不对，没有安装。": "簽名檔案格式不對，沒有安裝。",
+        "应用里的公钥读不出来，不自动安装。": "App 裡的公鑰讀不出來，不自動安裝。",
     ]
 }

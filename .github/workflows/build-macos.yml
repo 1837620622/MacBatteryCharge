@@ -23,6 +23,22 @@ jobs:
       - name: Test and package arm64 and Intel
         run: bash packaging/build.sh
 
+      # 更新签名：用 GitHub Secret UPDATE_SIGNING_KEY（私钥的 base64）给每个安装包签一个 .sig。
+      # 没设置就跳过（PR 或还没配密钥时）；发版那一步会检查，缺签名就不发。
+      - name: Sign update packages
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$UPDATE_SIGNING_KEY" ]]; then
+            echo "没有设置 UPDATE_SIGNING_KEY：这次不签名。发版前必须设置。"
+            exit 0
+          fi
+          for pkg in dist/*.pkg; do
+            printf '%s' "$UPDATE_SIGNING_KEY" | swift packaging/sign-update.swift "$pkg" > "$pkg.sig"
+            echo "已签名 $(basename "$pkg")"
+          done
+
       - name: Idle CPU and memory
         run: |
           set -euo pipefail
@@ -67,14 +83,16 @@ jobs:
           wait "$pid" || true
           cat snapshots/selftest-menubar.txt || echo "没有生成菜单栏自检报告"
 
-      - name: Self-test update (download, verify, install)
+      - name: Self-test update (verify signature, install, check version)
         continue-on-error: true
         run: |
           set -uo pipefail
           mkdir -p snapshots
-          app="build/$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          arch=$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )
+          app="build/$arch/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          version="$(tr -d '[:space:]' < VERSION)"
           status=0
-          "$app" --selftest-update "$PWD/snapshots/selftest-update.txt" || status=$?
+          "$app" --selftest-update "$PWD/snapshots/selftest-update.txt" --pkg "$PWD/dist/MacBatteryCharge-$version-$arch.pkg" --expect "$version" || status=$?
           cat snapshots/selftest-update.txt || echo "没有生成更新自检报告"
           exit "$status"
 
@@ -106,4 +124,7 @@ jobs:
             echo "v$VERSION 已经发布过，跳过。要发新包请先改 VERSION。"
             exit 0
           fi
+          for pkg in dist/*.pkg; do
+            [[ -f "$pkg.sig" ]] || { echo "缺少签名：$pkg。先设置 UPDATE_SIGNING_KEY 再发版。"; exit 1; }
+          done
           gh release create "v$VERSION" dist/* --title "v$VERSION" --notes-file packaging/release-notes.md
