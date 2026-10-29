@@ -74,22 +74,6 @@ final class DischargeTests: XCTestCase {
         XCTAssertFalse(ChargePolicy.heatActive(previous: true, celsius: 45, external: false), "拔掉电源就解除")
     }
 
-    // MARK: 漂移设置
-
-    func testDriftOnlyCountsWhenDischarging() {
-        XCTAssertEqual(Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80,
-                                discharge: true, drift: 5).activeDrift, 5)
-        XCTAssertEqual(Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80,
-                                discharge: false, drift: 5).activeDrift, 0, "不放电就没有漂移")
-        XCTAssertEqual(Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80,
-                                discharge: true, drift: 7).activeDrift, 0, "只认 5 和 10")
-        XCTAssertEqual(Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100,
-                                discharge: true, drift: 5).activeDrift, 0, "100% 没有漂移")
-        let item = Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80,
-                            discharge: true, drift: 10)
-        XCTAssertEqual(item.resumeAt, 70)
-    }
-
     func testDayLineSummarisesTheDay() {
         let line = schedule().dayLine(deadline: ClockTime(hour: 23, minute: 30))
         XCTAssertEqual(line, "06:00 起 80% · 21:00 起 100% · 23:30 断电")
@@ -166,10 +150,8 @@ final class DischargeTests: XCTestCase {
         var settings = AppSettings()
         XCTAssertFalse(settings.intervals[0].discharge, "新装默认不放电")
         settings.intervals[0].discharge = true
-        settings.intervals[0].drift = 5
         let decoded = try XCTUnwrap(AppSettings.decode(settings.encoded()))
         XCTAssertTrue(decoded.intervals[0].discharge)
-        XCTAssertEqual(decoded.intervals[0].drift, 5)
         XCTAssertEqual(decoded.notchIsland, true)
 
         // 旧文件没有 discharge 这一项：不推断，一律当作关。升级不能替用户打开主动放电。
@@ -179,7 +161,6 @@ final class DischargeTests: XCTestCase {
         let old = try XCTUnwrap(AppSettings.decode(Data(legacy.utf8)))
         XCTAssertFalse(old.intervals[0].discharge, "旧配置升级不能擅自开放电")
         XCTAssertFalse(old.intervals[1].discharge)
-        XCTAssertEqual(old.intervals[0].drift, 0, "旧文件没有漂移，默认关")
         XCTAssertEqual(old.unplugTarget, 100, "旧文件没有离电目标，默认 100%")
     }
 
@@ -233,18 +214,17 @@ final class DischargeTests: XCTestCase {
         XCTAssertTrue(points.allSatisfy { $0.percent == 95 }, "没有帮手只停充，不往下放")
     }
 
-    func testForecastDriftCyclesBetweenResumeAndLimit() throws {
-        let drifting = try XCTUnwrap(Schedule.compile([
-            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, discharge: true, drift: 5),
+    func testForecastDischargesOnlyToTheLimit() throws {
+        // 没有漂移：放到上限就接电，所以预测会落在上限附近，不会一路掉到 20%。
+        let plain = try XCTUnwrap(Schedule.compile([
+            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, discharge: true),
             Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100),
         ]).get())
-        let points = Forecast.points(schedule: drifting, minute: 6 * 60, percent: 95, external: true, deadline: nil,
+        let points = Forecast.points(schedule: plain, minute: 6 * 60, percent: 95, external: true, deadline: nil,
                                      chargeRate: nil, dischargeAvailable: true, horizon: 600)
-        let settled = points.filter { $0.minutesAhead >= 120 }
+        let settled = points.filter { $0.minutesAhead >= 180 }
         XCTAssertFalse(settled.isEmpty)
-        XCTAssertTrue(settled.allSatisfy { $0.percent >= 75 - 0.01 && $0.percent <= 80 + 0.01 }, "漂移只在 75 到 80 之间")
-        XCTAssertLessThan(settled.map(\.percent).min() ?? 100, 75.5, "会掉到 75 再接电")
-        XCTAssertGreaterThan(settled.map(\.percent).max() ?? 0, 79.5, "也会充回 80")
+        XCTAssertTrue(settled.allSatisfy { abs($0.percent - 80) <= 3.5 }, "放到上限附近就停，不往下掉")
     }
 
     func testForecastChargesAtNight() {
@@ -348,25 +328,5 @@ final class ModeTests: XCTestCase {
         var saved = fresh
         saved.mode = .full
         XCTAssertEqual(try XCTUnwrap(AppSettings.decode(saved.encoded())).mode, .full)
-    }
-
-    /// 学拔电时间：同一档里出现最多的那次。
-    func testLearnedUnplugTime() {
-        let calendar = Calendar(identifier: .gregorian)
-        var history = ChargeHistory()
-        let day = Date(timeIntervalSince1970: 1_700_000_000)
-        func stamp(_ dayOffset: Int, _ hour: Int, _ minute: Int) -> Date {
-            calendar.date(byAdding: .day, value: dayOffset,
-                          to: calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)!)!
-        }
-        for offset in 0..<4 {
-            history.add(ChargeSample(t: stamp(offset, 18, 20), p: 80, c: false, x: true, l: 80))
-            history.add(ChargeSample(t: stamp(offset, 18, 42), p: 80, c: false, x: false, l: 80))
-        }
-        XCTAssertEqual(history.learnedUnplug()?.text, "18:42", "四次都在 18:40 前后拔电源")
-        var few = ChargeHistory()
-        few.add(ChargeSample(t: stamp(0, 18, 20), p: 80, c: false, x: true, l: 80))
-        few.add(ChargeSample(t: stamp(0, 18, 42), p: 80, c: false, x: false, l: 80))
-        XCTAssertNil(few.learnedUnplug(), "次数太少不猜")
     }
 }

@@ -5,3 +5,4 @@ dist/
 .build/
 snapshots/
 .swiftpm/
+promo/*.mp4

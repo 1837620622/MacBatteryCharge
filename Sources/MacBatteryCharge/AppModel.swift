@@ -91,15 +91,17 @@ final class AppModel: ObservableObject {
     /// 上一次写进长期记录的样本，用来算插拔和时长。
     private var journalPrevious: ChargeSample?
     private var pollTask: Task<Void, Never>?
-    private var lastProgress = -1.0
     private var syncingHelper = false
     private var lastSentLimit: Int?
     private var lastHelperSend = Date.distantPast
 
-    init(preview: Bool = false) {
+    init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
         let loaded = preview ? AppSettings() : AppSettings.load()
         var start = loaded
+        // 只给截图用：不写回设置文件。
+        if let previewMode { start.mode = previewMode }
+        if let previewLanguage { start.language = previewLanguage }
         // 界面语言在画出第一个字之前就要定下来，否则会先闪一下中文。
         Lang.current = start.language
         if preview { start.guideSeen = true }
@@ -128,13 +130,6 @@ final class AppModel: ObservableObject {
     var battery: BatterySnapshot { reading?.battery ?? BatterySnapshot() }
     var currentInterval: Interval? { schedule.interval(at: minute) }
     var currentIndex: Int? { schedule.index(at: minute) }
-    var wantedLowPower: LowPowerChoice { schedule.lowPower(at: minute) }
-
-    var lowPowerMismatch: Bool {
-        guard let state = reading?.lowPower else { return false }
-        return !state.matches(wantedLowPower)
-    }
-
     /// 系统上限和这一段的计划不一致。分两种：正在改（短暂），和改失败（要提示）。
     var systemLimitMismatch: Bool {
         guard let value = reading?.chargeLimit.value else { return false }
@@ -155,7 +150,8 @@ final class AppModel: ObservableObject {
 
     var learnedRate: Double? { history.learnedRate() }
     /// 从历史里学到的拔电源时间，智能模式用。
-    var learnedUnplug: ClockTime? { journal.learnedUnplug() ?? history.learnedUnplug() }
+    /// 学到的「平时几点拔电源」。关掉学习、或者记录还不够，就是 nil。
+    var learnedUnplug: ClockTime? { settings.learnHabits ? journal.learnedUnplug() : nil }
     /// 智能模式这一轮算出来的结果，界面用它说人话。
     private(set) var smartDecision: SmartDecision?
 
@@ -218,9 +214,8 @@ final class AppModel: ObservableObject {
         }
         refreshing = true
         refreshStartedAt = Date()
-        let age: TimeInterval = windowVisible ? 20 : 600
         Task.detached(priority: .utility) {
-            let value = SystemReaders.read(lowPowerAge: age)
+            let value = SystemReaders.read()
             await self.receive(value)
         }
     }
@@ -233,9 +228,7 @@ final class AppModel: ObservableObject {
         // 帮手断开电源适配器放电时，系统会说“没接电源”，这里仍然算接着。
         let external = battery.externalConnected || value.helper?.adapterEnabled == false
 
-        heatActive = settings.heatProtection
-            ? ChargePolicy.heatActive(previous: heatActive, celsius: battery.celsius, external: external)
-            : false
+        heatActive = ChargePolicy.heatActive(previous: heatActive, celsius: battery.celsius, external: external)
 
         if wasExternal != external && reading != nil && lastFlow != nil { onPlugChange?(external) }
         // 临时充满和提前放开都在拔掉电源时结束。
@@ -245,9 +238,12 @@ final class AppModel: ObservableObject {
         }
         wasExternal = external
         if let until = topUpUntil, value.date >= until { topUpUntil = nil }
-        if let lift = deadlineLift, value.date >= lift.until || !settings.deadlineEnabled { deadlineLift = nil }
+        if let lift = deadlineLift, value.date >= lift.until || !settings.deadlineEnabled || settings.mode != .fixed {
+            deadlineLift = nil
+        }
 
-        if settings.deadlineEnabled, external, deadlineLift == nil, let percent = battery.percent,
+        // 断电前放开只属于固定模式。智能模式自己算备电时间，不在这里另起一套，也就不会发错通知。
+        if settings.mode == .fixed, settings.deadlineEnabled, external, deadlineLift == nil, let percent = battery.percent,
            let plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
                                          deadline: settings.deadline, target: settings.unplugTarget,
                                          rate: learnedRate), plan.liftNow {
@@ -300,7 +296,7 @@ final class AppModel: ObservableObject {
                                            deadlineLift: deadlineLift?.target, heat: heatActive)
         case .full:
             smartDecision = nil
-            decision = LimitDecision(limit: 100, reason: .gap, scheduled: 100)
+            decision = ChargePolicy.applyHeat(LimitDecision(limit: 100, reason: .full, scheduled: 100), heat: heatActive)
         }
     }
 
@@ -308,7 +304,6 @@ final class AppModel: ObservableObject {
         guard let percent = value.battery.percent, value.battery.present else { return }
         let sample = ChargeSample(t: value.date, p: percent, c: value.battery.flow == .charging,
                                   x: value.battery.externalConnected, l: decision.limit)
-        let previous = history.samples.last
         history.add(sample)
         // 长期记录按「天」累加。帮手断开电源时系统说没接电源，这里按真实状态记，
         // 否则一边接电源放电的日子会被记成整天用电池。
@@ -523,9 +518,8 @@ final class AppModel: ObservableObject {
                 scheduleError = error
             }
         }
-        if settings.heatProtection != old.heatProtection && !settings.heatProtection { heatActive = false }
         if settings.deadlineEnabled != old.deadlineEnabled || settings.deadline != old.deadline
-            || settings.unplugTarget != old.unplugTarget { deadlineLift = nil }
+            || settings.unplugTarget != old.unplugTarget || settings.mode != old.mode { deadlineLift = nil }
         if settings.language != old.language {
             Lang.current = settings.language
             // 菜单栏、窗口标题这些不在 SwiftUI 里的字要自己重画一遍。
@@ -598,7 +592,7 @@ final class AppModel: ObservableObject {
 
     func addInterval() {
         guard canAddInterval, let slot = Schedule.firstFreeSlot(in: settings.intervals) else { return }
-        let item = Interval(start: slot.start, end: slot.end, limit: 100, lowPower: .off)
+        let item = Interval(start: slot.start, end: slot.end, limit: 100)
         settings.intervals.append(item)
         settings.intervals.sort { $0.start < $1.start }
         editingID = item.id
@@ -637,93 +631,42 @@ final class AppModel: ObservableObject {
 
     // MARK: 立即应用
 
+    // MARK: 立即应用
+
+    /// 平时上限自动写，不用点。这里给一个「马上写一次」，不要密码。
     func applyNow() {
-        guard !applying, !preview else { return }
+        guard !preview else { return }
         if let error = scheduleError {
             fail(T("%@。改好之后再应用。", ["\(error.message)"]))
             return
         }
-        applying = true
-        saveNow()
-        let wanted = wantedLowPower
-        let hasBattery = battery.present
-        Task {
-            var notes: [String] = []
-            var tone = Message.Tone.success
-            let limit = decision.limit
-            switch await Task.detached(operation: { ChargeBridge.read() }).value {
-            case .current(let value) where value == limit:
-                notes.append(T("上限已是 %@%", ["\(limit)"]))
-            case .current:
-                if let error = await Task.detached(operation: { ChargeBridge.write(limit) }).value {
-                    notes.append(T("上限没写上：%@", ["\(error)"]))
-                    tone = .error
-                } else {
-                    notes.append(T("上限改为 %@%", ["\(limit)"]))
-                }
-            case .unsupported(let text):
-                notes.append(text)
-                tone = .info
-            case .unknown:
-                break
-            }
-
-            let current = await Task.detached(operation: { SystemReaders.lowPower() }).value
-            if let current, current.matches(wanted) {
-                notes.append(T("低电量已是「%@」", ["\(wanted.shortTitle)"]))
-            } else {
-                let key = current?.key ?? "lowpowermode"
-                switch await Task.detached(operation: { LowPowerWriter.apply(wanted, key: key, hasBattery: hasBattery) }).value {
-                case .done:
-                    notes.append(T("低电量改为「%@」", ["\(wanted.shortTitle)"]))
-                case .cancelled:
-                    notes.append(T("已取消，低电量没改"))
-                    if tone == .success { tone = .info }
-                case .failed(let text):
-                    notes.append(T("低电量没改：%@", ["\(text)"]))
-                    tone = .error
-                }
-            }
-
-            syncLogin()
-            if let note = loginNote { notes.append(note.trimmingCharacters(in: CharacterSet(charactersIn: "。"))) }
-            message = Message(tone: tone, text: notes.joined(separator: " · "))
-            applying = false
-            failedWrite = nil
-            refresh()
-        }
+        failedWrite = nil
+        autoApplyLimit()
+        message = Message(tone: .info, text: T("上限现在是 %@%", ["\(decision.limit)"]))
     }
 
-    func dismissMessage() { message = nil }
+    // MARK: 习惯
 
-    // MARK: 窗口
+    /// 已经记下几次「离开电源」。学习至少要 3 次。
+    var learnedCount: Int { journal.unplugMinutes.count }
 
-    func windowDidOpen() {
-        refresh()
-        refreshLoginState()
-        maybeCheckForUpdates()
+    /// 清掉学到的作息，从头学。电量记录和温度记录不动。
+    func forgetHabits() {
+        journal.forgetHabits()
+        let copy = journal
+        Task.detached(priority: .background) { try? copy.save(to: AppSettings.journalURL) }
+        refreshTips()
+        recompute()
+        recomputeForecast(force: true)
+        onStatusChange?()
+        autoApplyLimit()
     }
 
-    func finishGuide() {
-        settings.guideSeen = true
-        showGuide = false
-        saveNow()
-        maybeCheckForUpdates()
-    }
+    // MARK: 检查更新
 
-    func replayGuide() {
-        showGuide = true
-    }
-
-    // MARK: 更新
-
-    /// 只在窗口打开、引导看完后才查。登录时后台启动不查，也不弹窗。
+    /// 启动后每 20 小时查一次。查到新版本只提示，去发布页下载，不在软件里自己装。
     func maybeCheckForUpdates() {
-        guard !preview, settings.guideSeen, !showGuide, !settings.autoCheckUpdates else { return }
-        switch update {
-        case .idle, .upToDate, .failed: break
-        default: return
-        }
+        guard !preview, settings.guideSeen, settings.autoCheckUpdates else { return }
         if let last = settings.lastUpdateCheck, Date().timeIntervalSince(last) < 20 * 3600 { return }
         checkForUpdates(userInitiated: false)
     }
@@ -751,71 +694,35 @@ final class AppModel: ObservableObject {
         update = .idle
     }
 
-    func install(_ release: ReleaseInfo) {
-        guard let asset = release.package(arm64: SystemReaders.isAppleSilicon) else {
-            if let page = release.page { NSWorkspace.shared.open(page) }
-            return
-        }
-        update = .downloading(release, 0)
-        lastProgress = -1
-        // 文件名只取最后一段，免得资产名里的 ../ 把安装包写到缓存目录外面。
-        let destination = UpdateCheck.cacheDirectory.appendingPathComponent((asset.name as NSString).lastPathComponent)
-        let downloader = PackageDownloader(
-            destination: destination,
-            onProgress: { value in Task { @MainActor in self.downloadProgress(release, value) } },
-            onFinish: { result in Task { @MainActor in self.downloadFinished(release, asset, result) } }
-        )
-        downloader.start(asset.url)
+    func openDownloadPage(_ release: ReleaseInfo) {
+        if let page = release.page { NSWorkspace.shared.open(page) }
     }
 
-    private func downloadProgress(_ release: ReleaseInfo, _ value: Double) {
-        guard case .downloading = update, value - lastProgress >= 0.01 || value >= 1 else { return }
-        lastProgress = value
-        update = .downloading(release, value)
+    func dismissMessage() { message = nil }
+
+    // MARK: 窗口
+
+    func windowDidOpen() {
+        refresh()
+        refreshLoginState()
+        maybeCheckForUpdates()
     }
 
-    private func downloadFinished(_ release: ReleaseInfo, _ asset: ReleaseAsset, _ result: Result<URL, Error>) {
-        switch result {
-        case .failure(let error):
-            update = .failed(T("下载没有完成：%@", ["\(error.localizedDescription)"]))
-        case .success(let url):
-            Task {
-                // 没有校验码就不交给安装器：不能因为少了一个字段，就跳过完整性检查。
-                guard let expected = asset.sha256 else {
-                    try? FileManager.default.removeItem(at: url)
-                    update = .failed(T("这个版本没有附校验码，不能自动安装。请到 GitHub 手动下载。"))
-                    return
-                }
-                let actual = await Task.detached(operation: { try? UpdateCheck.sha256(of: url) }).value
-                guard actual == expected else {
-                    try? FileManager.default.removeItem(at: url)
-                    update = .failed(T("下载的安装包校验不对，已经删掉。请稍后再试。"))
-                    return
-                }
-                update = .installing(release)
-                NSWorkspace.shared.open(url)
-                waitForInstall(release)
-            }
-        }
+    func finishGuide() {
+        settings.guideSeen = true
+        showGuide = false
+        saveNow()
+        maybeCheckForUpdates()
     }
 
+    func replayGuide() {
+        showGuide = true
+    }
+
+    // MARK: 更新
+
+    /// 只在窗口打开、引导看完后才查。登录时后台启动不查，也不弹窗。
     /// 安装器装完后，“应用程序”里的版本号会变；那时退出并打开新版本。
-    private func waitForInstall(_ release: ReleaseInfo) {
-        pollTask?.cancel()
-        pollTask = Task {
-            for _ in 0..<900 {
-                try? await Task.sleep(for: .seconds(2))
-                if Task.isCancelled { return }
-                if let installed = Installation.installedVersion(), !AppVersion.isNewer(release.version, than: installed) {
-                    saveNow()
-                    Installation.relaunch(Installation.applicationsURL)
-                    return
-                }
-            }
-            update = .available(release)
-        }
-    }
-
     // MARK: 安装位置和卸载
 
     func moveToApplications() {
@@ -834,42 +741,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func uninstall() {
-        let alert = NSAlert()
-        alert.messageText = T("卸载充电上限？")
-        alert.informativeText = T("会关掉登录启动，删掉这台 Mac 上的配置，并把 MacBatteryCharge 移到废纸篓。充电上限和低电量模式保持现在的值。")
-        alert.addButton(withTitle: T("卸载"))
-        alert.addButton(withTitle: T("取消"))
-        alert.buttons.first?.hasDestructiveAction = true
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        timer?.cancel()
-        timer = nil
-        saveTask?.cancel()
-        let mayBeCut = adapterMayBeCut
-        Task {
-            if HelperInstaller.isInstalled {
-                switch await Task.detached(operation: { HelperInstaller.uninstall(adapterMayBeCut: mayBeCut) }).value {
-                case .ok: break
-                case .cancelled:
-                    message = Message(tone: .info, text: T("放电帮手要先卸掉才能卸载，密码框取消了。"))
-                    start()
-                    return
-                case .failed(let text):
-                    fail(T("放电帮手没有卸载：%@", ["\(text)"]))
-                    start()
-                    return
-                }
-            }
-            let result = await Task.detached(operation: { Installation.uninstall() }).value
-            switch result {
-            case .success:
-                NSApp.terminate(nil)
-            case .failure(let error):
-                fail(T("没有卸载完：%@", ["\(error.message)"]))
-            }
-        }
-    }
-
     /// 打开设置和数据所在的地方，卸载前想自己看一眼或者备份用。
     func openDataFolder() {
         let url = AppSettings.directory
@@ -881,43 +752,8 @@ final class AppModel: ObservableObject {
 
     /// 提 issue 时带上的正文：诊断信息 + 最近的日志。
     /// 只带这台机器的读数和最近的日志行，没有账号、没有窗口内容。
-    func issueBody() -> String {
-        var lines: [String] = []
-        lines.append(T("### 发生了什么\n\n（在这里写一句：你看到的现象）\n"))
-        lines.append(T("### 诊断信息\n\n```\n%@\n```", [diagnosticsText()]))
-        let recent = Log.recentLines(120)
-        if !recent.isEmpty {
-            lines.append(T("### 最近的日志\n\n```\n%@\n```", [recent.joined(separator: "\n")]))
-        }
-        return lines.joined(separator: "\n")
-    }
-
     /// 打开系统的 issue 页面，标题和正文预填好。日志只在这台机器上拼进 URL，不上传到别处。
-    func reportIssue() {
-        var components = URLComponents(url: AppInfo.issuesPage, resolvingAgainstBaseURL: false)
-        var items = components?.queryItems ?? []
-        items.append(URLQueryItem(name: "title", value: T("[问题] ")))
-        items.append(URLQueryItem(name: "body", value: issueBody()))
-        components?.queryItems = items
-        let url = components?.url ?? AppInfo.issuesPage
-        if url.absoluteString.count > 7000, let short = URL(string: AppInfo.issuesPage.absoluteString) {
-            // 日志太长就只带诊断，剩下的让用户复制。
-            copyIssueBody()
-            NSWorkspace.shared.open(short)
-            message = Message(tone: .info, text: T("日志太长，已经复制到剪贴板。粘到 issue 里就行。"))
-            return
-        }
-        NSWorkspace.shared.open(url)
-        Log.write("info", "打开 issue 页面")
-    }
-
     /// 只复制正文，不打开浏览器。
-    func copyIssueBody() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(issueBody(), forType: .string)
-    }
-
     // MARK: 文字
 
     /// 窗口上那一句话：今天的时间表。
@@ -932,57 +768,6 @@ final class AppModel: ObservableObject {
         if helperHandlesLimit { return T("帮手") }
         if let helper, helper.chargeControl == .system { return T("系统（新固件，帮手不碰）") }
         return T("没有人")
-    }
-
-    func diagnosticsText() -> String {
-        let battery = battery
-        let limitText: String
-        switch reading?.chargeLimit {
-        case .current(let value)?: limitText = T("系统上限 %@%", ["\(value)"])
-        case .unsupported(let text)?: limitText = T("系统上限 不支持（%@）", ["\(text)"])
-        default: limitText = T("系统上限 未读到")
-        }
-        let helperText: String
-        if let helper {
-            helperText = T("帮手 %@，协议 %@，断电控制 %@，充电控制 %@，错误 %@",
-                           ["\(helper.version)", "\(helper.protocolVersion)", "\(helper.adapterControl)",
-                            "\(helper.chargeControl.rawValue)", "\(helper.error ?? T("无"))"])
-        } else {
-            helperText = T("帮手 没装，或者连不上")
-        }
-        let chip = SystemReaders.isAppleSilicon ? T("Apple 芯片") : "Intel"
-        let percentText = battery.percent.map { "\($0)%" } ?? T("未读到")
-        let cyclesText = battery.cycles.map(String.init) ?? T("未读到")
-        let healthText = battery.health.map { "\($0)%" } ?? T("未读到")
-        let celsiusText = battery.celsius.map { String(format: "%.1f°C", $0) } ?? T("未读到")
-        return [
-            T("充电上限 %@", ["\(Installation.version)"]),
-            T("系统 %@", ["\(ProcessInfo.processInfo.operatingSystemVersionString)"]),
-            T("机型 %@", ["\(Self.modelIdentifier())"]),
-            T("芯片 %@", [chip]),
-            T("电量 %@，%@", [percentText, battery.flow.menuWord]),
-            T("循环 %@，健康 %@", [cyclesText, healthText]),
-            T("温度 %@", [celsiusText]),
-            limitText,
-            T("上限执行者 %@", [limitOwner]),
-            helperText,
-            T("时间表 %@", [daySummary]),
-        ].joined(separator: "\n")
-    }
-
-    func copyDiagnostics() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(diagnosticsText(), forType: .string)
-        message = Message(tone: .success, text: T("诊断信息已复制，可以直接贴给开发者。"))
-    }
-
-    private static func modelIdentifier() -> String {
-        var size = 0
-        guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return T("未知") }
-        var buffer = [CChar](repeating: 0, count: size)
-        guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else { return T("未知") }
-        return String(cString: buffer)
     }
 
     static let dayFormatter: DateFormatter = {
@@ -1055,6 +840,8 @@ final class AppModel: ObservableObject {
             text += T(" · 过热保护")
         case .smart:
             text += T(" · 智能：平时 %@%", ["\(decision.scheduled)"])
+        case .full:
+            text += T(" · 一直充满")
         }
         return text
     }
@@ -1130,6 +917,8 @@ final class AppModel: ObservableObject {
             journal.days.append(record)
         }
         journal.days.reverse()
+        journal.unplugMinutes = (0..<14).map { 18 * 60 + 40 + $0 % 12 }
+        journal.plugMinutes = (0..<14).map { _ in 9 * 60 + 5 }
         tips = HabitTips.items(journal: journal)
         recompute()
         recomputeForecast(force: true)

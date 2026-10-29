@@ -37,7 +37,7 @@ final class AppearanceTests: XCTestCase {
     func testAuthor() {
         XCTAssertEqual(AppInfo.author, "传康Kk")
         XCTAssertEqual(AppInfo.authorPage.absoluteString, "https://github.com/1837620622")
-        XCTAssertEqual(AppInfo.homepage.absoluteString, "https://github.com/1837620622/MacBatteryCharge")
+        XCTAssertEqual(AppInfo.homepage.absoluteString, "https://github.com/1837620622/MacFullBar")
         XCTAssertTrue(AppInfo.copyright.contains(AppInfo.author))
     }
 

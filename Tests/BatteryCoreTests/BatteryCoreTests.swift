@@ -3,8 +3,8 @@ import XCTest
 
 private func at(_ hour: Int, _ minute: Int) -> Int { hour * 60 + minute }
 
-private func interval(_ start: String, _ end: String, _ limit: Int, _ low: LowPowerChoice = .off) -> Interval {
-    Interval(start: ClockTime(text: start)!, end: ClockTime(text: end)!, limit: limit, lowPower: low)
+private func interval(_ start: String, _ end: String, _ limit: Int) -> Interval {
+    Interval(start: ClockTime(text: start)!, end: ClockTime(text: end)!, limit: limit)
 }
 
 private func compiled(_ items: [Interval]) -> Schedule {
@@ -28,9 +28,8 @@ final class ScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.limit(at: at(20, 59)), 80, "20:59 应为 80")
         XCTAssertEqual(schedule.limit(at: at(21, 0)), 100, "21:00 应为 100")
         XCTAssertEqual(schedule.limit(at: at(23, 30)), 100, "23:30 应为 100")
-        XCTAssertEqual(schedule.lowPower(at: at(10, 0)), .off, "白天默认不用低电量")
-        XCTAssertEqual(schedule.lowPower(at: at(22, 0)), .battery, "晚间默认仅电池开低电量")
-        XCTAssertEqual(schedule.lowPower(at: at(5, 0)), .battery, "清晨仍在晚间这一段")
+        XCTAssertFalse(schedule.discharge(at: at(10, 0)), "默认不主动放电")
+        XCTAssertFalse(schedule.discharge(at: at(22, 0)), "晚间也不放电")
         XCTAssertFalse((0..<1440).contains { schedule.isGap(at: $0) }, "默认时间段应盖住一整天")
         XCTAssertEqual(schedule.blocks.map(\.limit), [100, 80, 100])
     }
@@ -95,7 +94,7 @@ final class SettingsTests: XCTestCase {
     func testLegacyFile() throws {
         let json = """
         {"guideSeen": true, "launchAtLogin": false, "lowPowerAuto": true,
-         "intervals": [{"start": "06:00", "end": "21:00", "limit": 80},
+         "intervals": [{"start": "06:00", "end": "21:00", "limit": 80, "lowPower": "battery", "drift": 5},
                        {"start": "21:00", "end": "06:00", "limit": 100, "lowPower": "off"},
                        {"start": "bad", "end": "06:00", "limit": 100}]}
         """
@@ -103,8 +102,9 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.guideSeen)
         XCTAssertFalse(settings.launchAtLogin)
         XCTAssertEqual(settings.intervals.count, 2, "坏的一段丢掉，其余保留")
-        XCTAssertEqual(settings.intervals[0].lowPower, .battery, "旧的全局开关迁到每一段")
-        XCTAssertEqual(settings.intervals[1].lowPower, .off)
+        XCTAssertFalse(settings.intervals[0].discharge, "旧文件的低电量和漂移直接忽略，不推断放电")
+        XCTAssertEqual(settings.intervals[0].resumeAt, 80)
+        XCTAssertTrue(settings.learnHabits, "老文件没有这一项：默认学习")
         XCTAssertTrue(settings.deadlineEnabled)
         XCTAssertEqual(settings.deadline.text, "23:30")
     }
@@ -124,7 +124,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(back.lastUpdateCheck, settings.lastUpdateCheck)
         XCTAssertEqual(back.intervals.map(\.rangeText), settings.intervals.map(\.rangeText))
         let text = String(decoding: try settings.encoded(), as: UTF8.self)
-        XCTAssertTrue(text.contains("\"lowPower\" : \"battery\""))
+        XCTAssertFalse(text.contains("lowPower"), "低电量已经去掉，不再写出")
         XCTAssertFalse(text.contains("\"id\""), "文件里不存内部编号")
     }
 }
@@ -390,28 +390,14 @@ final class TextTests: XCTestCase {
         XCTAssertNil(ReleaseInfo.parse(Data("{}".utf8)))
     }
 
-    func testPmset() {
-        let custom = "Battery Power:\n lowpowermode         1\n sleep 1\nAC Power:\n lowpowermode         0\n"
-        let state = LowPowerState.parse(custom: custom)
-        XCTAssertEqual(state, LowPowerState(battery: 1, ac: 0), "低电量配置文本")
-        XCTAssertEqual(state?.choice, .battery)
-        XCTAssertNil(LowPowerState.parse(custom: "Battery Power:\n lowpowermode 1\n"), "缺电源段应失败")
-        let power = LowPowerState.parse(custom: "Battery Power:\n powermode 1\nAC Power:\n powermode 2\n")
-        XCTAssertEqual(power?.key, "powermode", "有的机型叫 powermode")
-        XCTAssertEqual(power?.choice, .battery, "高性能不算低电量")
-        XCTAssertNil(LowPowerState(battery: 0, ac: 1).choice, "只接电源时开没有对应项")
-        XCTAssertEqual(LowPowerChoice.normalized("nope"), .off, "不认识的低电量选项按不用")
-    }
-
     func testGuide() {
         let bodies = GuideCopy.bodies.joined(separator: "\n")
-        XCTAssertEqual(GuideCopy.titles.count, 6, "引导是六步")
-        XCTAssertEqual(GuideCopy.bodies.count, 6)
-        XCTAssertTrue(GuideCopy.titles.joined().contains("刘海"), "引导讲刘海")
-        XCTAssertTrue(bodies.contains("管理员"), "引导讲管理员密码")
-        XCTAssertTrue(bodies.contains("放电帮手"), "引导讲放电帮手")
-        XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 40 }, "每步正文不超过 40 个字")
-        XCTAssertTrue(bodies.contains("最低 20%"), "引导讲放电下限")
+        XCTAssertEqual(GuideCopy.titles.count, 3, "引导只有三步")
+        XCTAssertEqual(GuideCopy.bodies.count, 3)
+        XCTAssertTrue(bodies.contains("刘海"), "引导讲到刘海")
+        XCTAssertTrue(bodies.contains("智能"), "引导先讲智能模式")
+        XCTAssertTrue(bodies.contains("学满 3 次"), "引导讲学习习惯")
+        XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 60 }, "每步正文不超过 60 个字")
         XCTAssertFalse(bodies.contains("完全磁盘"), "引导不索要磁盘权限")
         XCTAssertFalse(bodies.contains("辅助功能"), "引导不索要辅助功能")
         XCTAssertFalse(bodies.contains("屏幕录制"))

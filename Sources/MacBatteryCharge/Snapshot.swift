@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 import BatteryCore
 
-/// `--snapshot 目录`：用假数据把主窗口、六步引导和菜单栏图标画成 PNG，给 CI 看界面用。不读也不改这台 Mac 的任何设置。
+/// `--snapshot 目录`：用假数据把三种模式的主窗口、设置、引导、刘海灵动岛和菜单栏图标画成 PNG。
+/// 给 CI 看界面，也给 README 和宣传片用。不读也不改这台 Mac 上的任何设置。
 enum Snapshot {
     @MainActor
     static func run(to directory: URL) -> Bool {
@@ -17,68 +18,37 @@ enum Snapshot {
         }
 
         var ok = true
-        let folds = ["top", "bottom", "mode", "journal", "language", "history", "schedule", "helper", "smart", "look", "support", "system"]
-        func setFolds(_ values: [String: Bool]) {
-            for key in folds { UserDefaults.standard.set(values[key] ?? true, forKey: "fold.\(key)") }
-        }
         func file(_ name: String) -> URL { directory.appendingPathComponent(name) }
 
-        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            let model = sampleModel()
-
-            // 三种质感，每种都先全展开。
-            for look in WindowLook.allCases {
-                model.settings.look = look
-                setFolds([:])
-                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
-                            to: file("main-\(look.rawValue)-\(name).png")) && ok
+        // 中文和英文各一套，README 里中文用中文截图，英文用英文截图。
+        for language in [AppLanguage.zh, AppLanguage.en] {
+            let tag = language == .zh ? "zh" : "en"
+            for mode in ChargeMode.allCases {
+                let model = sampleModel(mode: mode, language: language)
+                ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .aqua,
+                            to: file("main-\(mode.rawValue)-\(tag).png")) && ok
             }
-            model.settings.look = .frosted
-
-            setFolds([:])
-            ok = render(MainView(model: model).environment(\.windowLook, .frosted).environment(\.isPreview, true)
-                .background(WindowBackdrop(look: .frosted, transparency: model.settings.transparency, preview: true))
-                .frame(width: 420, height: 2300), size: NSSize(width: 420, height: 2300), appearance: appearance,
-                        to: file("main-full-\(name).png")) && ok
-
-            // 第一层收起；只收第二层。
-            setFolds(["top": false, "bottom": false])
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 480), appearance: appearance,
-                        to: file("main-folded-\(name).png")) && ok
-            setFolds(["history": false, "schedule": true, "helper": false, "smart": false, "look": false, "system": false])
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 900), appearance: appearance,
-                        to: file("main-cards-folded-\(name).png")) && ok
-            setFolds([:])
-
-            // 设置里最长的两块，单独看。
-            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: appearance,
-                        to: file("main-top-\(name).png")) && ok
-
-            ok = render(islandPreview(model: model, expanded: true), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: file("island-expanded-\(name).png")) && ok
-            ok = render(islandPreview(model: model, expanded: false), size: NotchIsland.panelSize, appearance: .darkAqua,
-                        to: file("island-ears-\(name).png")) && ok
-            for step in GuideCopy.titles.indices {
-                let guide = GuideView(model: model, startStep: step, fixedPhase: 0.8)
-                    .background(WindowBackdrop(look: .frosted, transparency: 0.25, preview: true))
-                    .environment(\.windowLook, .frosted)
-                ok = render(guide, size: NSSize(width: 420, height: 640), appearance: appearance,
-                            to: file("guide-\(step + 1)-\(name).png")) && ok
-            }
-            ok = writeMenuBar(dark: appearance == .darkAqua, to: file("menubar-\(name).png")) && ok
+            let model = sampleModel(mode: .smart, language: language)
+            ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .darkAqua,
+                        to: file("main-smart-dark-\(tag).png")) && ok
+            ok = render(SettingsView(model: model), size: NSSize(width: 460, height: 640), appearance: .aqua,
+                        to: file("settings-\(tag).png")) && ok
+            ok = render(GuideView(model: model), size: NSSize(width: 460, height: 430), appearance: .aqua,
+                        to: file("guide-\(tag).png")) && ok
+            ok = render(islandPreview(model: model, expanded: true), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
+                        to: file("island-expanded-\(tag).png")) && ok
+            ok = render(islandPreview(model: model, expanded: false), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
+                        to: file("island-ears-\(tag).png")) && ok
         }
-        print(ok ? T("截图在 %@", ["\(directory.path)"]) : T("有截图没画出来"))
+        ok = writeMenuBar(to: file("menubar.png")) && ok
         return ok
     }
 
-    // MARK: 假数据
-
+    /// 假数据：80% 接着电源，有半年的记录，学到的拔电时间是 18:40 前后。
     @MainActor
-    static func sampleModel() -> AppModel {
-        let model = AppModel(preview: true)
-        let calendar = Calendar.current
-        let now = calendar.date(bySettingHour: 14, minute: 10, second: 0, of: Date()) ?? Date()
-        let schedule = model.schedule
+    static func sampleModel(mode: ChargeMode, language: AppLanguage = .en) -> AppModel {
+        let model = AppModel(preview: true, previewMode: mode, previewLanguage: language)
+        let now = Calendar.current.date(bySettingHour: 14, minute: 10, second: 0, of: Date()) ?? Date()
 
         var battery = BatterySnapshot()
         battery.present = true
@@ -99,40 +69,24 @@ enum Snapshot {
         let memory = MemorySnapshot(totalBytes: 16 * gib, pageSize: page, free: 2 * gib / page, active: 6 * gib / page,
                                     inactive: 3 * gib / page, wired: 2 * gib / page, compressed: gib / page,
                                     speculative: 0, pressure: 1)
-
         let helper = HelperStatus(version: Installation.version, adapterControl: true, chargeControl: .system,
                                   adapterEnabled: true, percent: 80, external: true, leaseRemaining: 0)
         let reading = SystemReading(battery: battery, memory: memory, chargeLimit: .current(80),
-                                    lowPower: LowPowerState(battery: 0, ac: 0), thermal: .nominal, date: now, helper: helper)
-        model.loadPreview(reading, history: sampleHistory(ending: now, schedule: schedule), minute: currentMinute(now))
+                                    thermal: .nominal, date: now, helper: helper)
+        model.loadPreview(reading, history: sampleHistory(ending: now), minute: currentMinute(now))
         return model
     }
 
-    /// 按默认作息模拟 24 小时：白天停在 80%，21:00 后充到 100%，23:30 断电用电池，06:00 来电。
-    @MainActor
-    static func sampleHistory(ending end: Date, schedule: Schedule) -> ChargeHistory {
+    /// 最近 16 小时：白天接电源，18:00 到 21:00 用电池，电量在 60% 到 80% 之间。
+    static func sampleHistory(ending end: Date) -> ChargeHistory {
         var history = ChargeHistory()
-        var percent = 80.0
-        var time = end.addingTimeInterval(-24 * 3600)
+        var time = end.addingTimeInterval(-16 * 3600)
         while time <= end {
-            let minute = currentMinute(time)
-            let plugged = minute >= 6 * 60 && minute < 23 * 60 + 30
-            let limit = schedule.limit(at: minute)
-            var charging = false
-            if plugged {
-                if percent < Double(limit) {
-                    percent = min(Double(limit), percent + 2.2)
-                    charging = true
-                }
-            } else {
-                percent -= minute >= 23 * 60 + 30 || minute < 2 * 60 ? 1.6 : 0.1
-            }
-            history.add(ChargeSample(t: time, p: Int(percent.rounded()), c: charging, x: plugged, l: limit))
+            let hour = Calendar.current.component(.hour, from: time)
+            let plugged = !(hour >= 18 && hour < 21)
+            let percent = plugged ? 80 : 60 + (hour % 5) * 3
+            history.add(ChargeSample(t: time, p: percent, c: false, x: plugged, l: 80))
             time = time.addingTimeInterval(600)
-        }
-        for day in 0..<60 {
-            let date = end.addingTimeInterval(Double(day - 59) * 86_400)
-            history.addHealth(HealthPoint(day: AppModel.dayFormatter.string(from: date), health: 93 - day / 20, cycles: 160 + day))
         }
         return history
     }
@@ -149,8 +103,6 @@ enum Snapshot {
             IslandView(model: model, state: state, onOpen: {})
         }
     }
-
-    // MARK: 画图
 
     @MainActor
     static func render<V: View>(_ view: V, size: NSSize, appearance: NSAppearance.Name, to url: URL) -> Bool {
@@ -184,8 +136,7 @@ enum Snapshot {
             print(T("画不出 %@", ["\(url.lastPathComponent)"]))
             return false
         }
-        let rep = NSBitmapImageRep(cgImage: image)
-        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+        guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return false }
         return write(data, to: url)
     }
 
@@ -207,44 +158,12 @@ enum Snapshot {
         return rep.representation(using: .png, properties: [:])
     }
 
-    /// 菜单栏图标的几种状态排成一行。
+    /// 菜单栏图标：上面一行是上限，下面一行是状态。
     @MainActor
-    static func writeMenuBar(dark: Bool, to url: URL) -> Bool {
-        let states: [(String, String, Double?, Bool)] = [
-            ("80%", T("接通"), 0.8, false),
-            ("100%", T("充电"), 0.86, true),
-            ("80%", T("电池"), 0.62, false),
-            ("100%", T("放电"), 0.35, false),
-            ("—", T("无电池"), nil, false),
-        ]
-        let icons = states.map { MenuBarIcon.image(top: $0.0, bottom: $0.1, level: $0.2, charging: $0.3) }
-        let gap: CGFloat = 18
-        let width = icons.reduce(gap) { $0 + $1.size.width + gap }
-        let size = NSSize(width: width, height: 30)
-        let ink: NSColor = dark ? .white : .black
-        let background = dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.93, alpha: 1)
-
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 3), pixelsHigh: Int(size.height * 3),
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return false }
-        rep.size = size
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        background.setFill()
-        NSRect(origin: .zero, size: size).fill()
-        var x = gap
-        for icon in icons {
-            let tinted = NSImage(size: icon.size, flipped: false) { rect in
-                icon.draw(in: rect)
-                ink.set()
-                rect.fill(using: .sourceAtop)
-                return true
-            }
-            tinted.draw(in: NSRect(x: x, y: (size.height - icon.size.height) / 2, width: icon.size.width, height: icon.size.height))
-            x += icon.size.width + gap
-        }
-        NSGraphicsContext.restoreGraphicsState()
-        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+    static func writeMenuBar(to url: URL) -> Bool {
+        let image = MenuBarIcon.image(top: "80%", bottom: T("充电"), level: 0.8, charging: true)
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else { return false }
         return write(data, to: url)
     }
 
@@ -253,7 +172,7 @@ enum Snapshot {
             try data.write(to: url)
             return true
         } catch {
-            print(T("存不了 %@：%@", ["\(url.lastPathComponent)", "\(error.localizedDescription)"]))
+            print(T("写不了 %@：%@", ["\(url.lastPathComponent)", "\(error.localizedDescription)"]))
             return false
         }
     }

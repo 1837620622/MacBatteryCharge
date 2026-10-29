@@ -55,6 +55,12 @@ public struct HabitJournal: Codable, Equatable, Sendable {
     /// 最近拔电源的时刻（一天内的第几分钟），最多留这么多条。
     public var unplugMinutes: [Int] = []
     public var plugMinutes: [Int] = []
+    /// 这次接上电源的时刻。拔掉时用它算充了多久；没接着电源时是 nil。
+    public var pluggedSince: Date?
+    /// 接着电源满这么多分钟，拔掉才算一次「离开电源」。短暂拔下来挪个地方不算作息。
+    public static let minPluggedMinutes = 30
+    /// 至少记下这么多次「离开电源」，才开始说「平时几点拔」。
+    public static let minLearnCount = 3
 
     public init() {}
 
@@ -99,18 +105,41 @@ public struct HabitJournal: Codable, Equatable, Sendable {
         if let cycles { days[index].cycles = cycles }
         if let health { days[index].health = health }
 
-        guard let previous else { return }
+        // 两次读数隔得太久（程序没在跑）时，插拔的确切时刻不知道，不记时刻，只把接电的起点重置。
+        let gap = previous.map { sample.t.timeIntervalSince($0.t) / 60 } ?? .infinity
+        let continuous = gap > 0 && gap <= Double(Self.maxGapMinutes)
+        let wasPlugged = previous?.x ?? false
         let ofDay = Self.minuteOfDay(sample.t)
-        // 只在当天第一次拔、第一次插时记，避免白天反复插拔把习惯冲成噪声。
-        if previous.x && !sample.x && days[index].unplug == nil {
-            days[index].unplug = ofDay
-            unplugMinutes.append(ofDay)
-            if unplugMinutes.count > 120 { unplugMinutes.removeFirst(unplugMinutes.count - 120) }
+
+        if sample.x && !wasPlugged {
+            pluggedSince = sample.t
+            // 只记当天第一次接上，和第一次拔掉一样。
+            if continuous && days[index].plug == nil {
+                days[index].plug = ofDay
+                plugMinutes.append(ofDay)
+                if plugMinutes.count > 120 { plugMinutes.removeFirst(plugMinutes.count - 120) }
+            }
         }
-        if !previous.x && sample.x && days[index].plug == nil {
-            days[index].plug = ofDay
-            plugMinutes.append(ofDay)
-            if plugMinutes.count > 120 { plugMinutes.removeFirst(plugMinutes.count - 120) }
+        if !sample.x && wasPlugged {
+            let charged = pluggedSince.map { sample.t.timeIntervalSince($0) / 60 } ?? 0
+            pluggedSince = nil
+            // 只有接着电源满 minPluggedMinutes 分钟、并且是当天第一次，才算一次「离开电源」。
+            // 白天挪个地方、插拔一下，不当作作息，免得把习惯冲成噪声。
+            if continuous && charged >= Double(Self.minPluggedMinutes) && days[index].unplug == nil {
+                days[index].unplug = ofDay
+                unplugMinutes.append(ofDay)
+                if unplugMinutes.count > 120 { unplugMinutes.removeFirst(unplugMinutes.count - 120) }
+            }
+        }
+    }
+
+    /// 清掉学到的作息，从头学。电量曲线和长期记录的其它部分不动。
+    public mutating func forgetHabits() {
+        unplugMinutes = []
+        plugMinutes = []
+        for index in days.indices {
+            days[index].unplug = nil
+            days[index].plug = nil
         }
     }
 
@@ -121,7 +150,7 @@ public struct HabitJournal: Codable, Equatable, Sendable {
 
     /// 从长期记录里学「平时几点拔电源」。和 `ChargeHistory.learnedUnplug` 同一套投票，
     /// 但用的是几个月的记录，不是 72 小时。至少要有 `minSamples` 次，否则不猜。
-    public func learnedUnplug(minSamples: Int = 3) -> ClockTime? {
+    public func learnedUnplug(minSamples: Int = HabitJournal.minLearnCount) -> ClockTime? {
         Self.vote(unplugMinutes, minSamples: minSamples)
     }
 

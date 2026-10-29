@@ -1,24 +1,42 @@
-3.0.2：加了三种用法、长期记录和多语言，另外修掉一批会让功能静默失效的问题。
+# 充电上限 3.1.0
 
-**这一版新加的**
+这一版把功能收窄，让平时用得上的部分更清楚，并修了安装包里看不到应用图标的问题。
 
-- **三种用法。** 窗口最上面选「智能 / 固定 / 一直充满」。智能（新装默认）平时停在你设的日常上限（默认 80%），快拔电时按你平时拔电的时间自己补到 100%，目标是随时有电；它不主动放电，因为一边接电源一边掉电和「随时有电」冲突。固定模式严格按时间段来，原来用 2.x 的人升级后落在这里，行为不变。一直充满适合台式机。
-- **长期记录。** 像健康 App 那样每天记一行：电量高低、接电源多久、用电池多久、挂满多久、第一次拔电的时间、最热温度。留一年。窗口里画成每天一根柱。
-- **温馨提醒。** 记录够三天才开始说话，而且每条都带数字：这一周有几天挂在满电、你平时大约几点拔电源、这周几乎一直插着、最热到多少度、30 天健康掉了几个点。
-- **多语言。** 简体中文和英文，默认跟随系统，也能在窗口里直接选，改完立刻生效。
-- **崩溃和错误日志 + 一键提 issue。** 崩溃时的异常名、说明和调用栈会记下来。系统卡片里的「反馈问题」直接打开新建 issue，诊断信息和最近 120 行日志都填好。
+## 变化
 
-**修掉的问题**
+- **三种模式都能用，行为写得清楚。**
+  - 智能（默认）：平时停在日常上限（80%，可选 85、90、95）；记住你平时几点拔电源，离电前充到目标（100%，可选 80、90）。
+  - 固定：一天分段，每段一个上限；没排到的时间按 100% 充；可以选「断电前充满」。
+  - 一直充满：接电源就充到 100%。
+- **记住你的充电习惯。** 每天第一次接着电源满 30 分钟以上、然后拔掉，记作一次；记满 3 次就能说出你平时几点拔电源。可以重新学习，也可以关掉学习。
+- **过热保护对所有模式都生效。** 电池偏热时最高停在 80%，之前「一直充满」模式会漏掉这一条，现在修了。
+- **修正：** 智能模式不再显示「已提前放开」的通知（那是固定模式的逻辑）；检查更新指向正确的仓库。
+- **界面重做。** 主窗口一屏看完状态、模式和临时充满；设置收进右上角的齿轮。引导改成三步。
+- **去掉** 低电量模式、漂移、应用内安装和卸载、诊断复制。检查更新只打开发布页，下载你自己装。
+- **安装包。** DMG 显示应用图标；PKG 的安装器里有欢迎页和应用图标，并限定芯片架构。
+- **多语言。** 简体中文、繁體中文、English，默认跟随系统。
 
-- 帮手写回结果时没设 `SO_NOSIGPIPE`。客户端超时先断开时，root 帮手会被系统信号直接杀掉，放电中断、电源被接回去。已修，短写也补成循环。
-- 有些新固件的机器原来会被判成「上限归系统管」，但其实还有可用的键，结果时间表写的 80% 谁都没执行。现在会继续往下探；真的探不到，窗口会直说「这台 Mac 的上限没人执行」。
-- 卸载帮手前把电源接回来的那一步结果被丢掉了。现在必须确认成功，否则中止并提示重启后再卸。
-- 「自动检查更新」的判断写反了：打开时不查，关掉才查。已修正。
-- 跑系统命令时两个输出管道可能互相等成死锁；长期记录满 400 天裁旧数据时会下标越界崩溃。都已修。
-- 安装包里的帮手升级不再依赖 `ProgramArguments` 的数组下标，复制前先验签名，并等旧帮手退出再接替。
-- 上限写失败时菜单栏显示系统实际的值，不再拿目标值糊过去。
+## 升级
 
-**注意**
+旧版的设置文件照常读取。没有模式这一项的老文件，仍按固定模式（时间段）运行，不会悄悄换成智能。老文件里的低电量和漂移设置会被忽略。
 
-- 老配置升级后按「固定」模式跑，行为不会变。想要新默认的智能模式，在窗口最上面切换即可。
-- 主动放电仍然默认关闭，要自己在时间段里打开。
+## 还没有在真机上完整测过
+
+CI 能编译、跑单元测试、打包，但没法替你在每一台真机上测。请在你自己的 Mac 上确认：智能模式会不会按时放开；固定时间段是否按设定；插拔电源时刘海弹出是否正常。遇到问题请到 Issues 反馈。
+
+
+---
+
+## English
+
+Charge Limit 3.1.0 narrows the app to what people use every day, makes the three modes behave as described, and fixes missing app icons in the installers.
+
+- **Three modes, clearly defined.** Smart (default) holds at the daily limit and learns when you usually unplug. Fixed uses a schedule of limits. Always full charges to 100%.
+- **Learns your habits.** The first long plugged-in session each day (30+ minutes) that ends in an unplug counts. After three, it knows your usual unplug time. You can learn again or turn learning off.
+- **Heat protection applies to every mode**, including Always full.
+- **Interface redone.** One main window; settings behind the gear icon. Three-step guide.
+- **Removed:** low-power mode, drift, in-app installer and uninstaller, diagnostics export. Update checks now open the release page.
+- **Installers.** The DMG shows the app icon. The PKG installer has a welcome page with the icon and limits installation to the matching chip.
+- **Languages:** 简体中文, 繁體中文, English, following the system by default.
+
+Settings from older versions still load. A file without a mode stays on Fixed. Old low-power and drift settings are ignored.

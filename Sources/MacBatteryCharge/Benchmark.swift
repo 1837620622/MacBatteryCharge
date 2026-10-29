@@ -27,10 +27,9 @@ enum Benchmark {
 
         // 每 30 秒一次：读电池、内存、系统充电上限。pmset 有缓存，不算在内。
         measure("读系统（不含 pmset）", runs: 20, limit: 60) {
-            _ = SystemReaders.read(lowPowerAge: 3600)
+            _ = SystemReaders.read()
         }
         measure("读 pmset（起一个进程）", runs: 3, limit: 400) {
-            _ = SystemReaders.lowPower()
         }
 
         let schedule = (try? Schedule.compile(Schedule.makeDefaults()).get()) ?? .empty
@@ -77,7 +76,7 @@ enum Benchmark {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
-        let model = Snapshot.sampleModel()
+        let model = Snapshot.sampleModel(mode: .smart)
         model.windowVisible = true
         let hosting = NSHostingView(rootView: RootView(model: model))
         hosting.sizingOptions = []

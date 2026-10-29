@@ -5,7 +5,7 @@ public enum AppInfo {
     public static var name: String { T("充电上限") }
     public static var author: String { T("传康Kk") }
     public static let githubUser = "1837620622"
-    public static let repository = "1837620622/MacBatteryCharge"
+    public static let repository = "1837620622/MacFullBar"
     public static var copyright: String { T("© 2026 传康Kk") }
 
     public static var homepage: URL { URL(string: "https://github.com/\(repository)")! }

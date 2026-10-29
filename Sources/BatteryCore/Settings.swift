@@ -20,29 +20,32 @@ public enum WindowLook: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// ~/Library/Application Support/MacBatteryCharge/settings.json，和 2.x 同一个文件，键名兼容。
+/// ~/Library/Application Support/MacBatteryCharge/settings.json。旧版本的文件照样能读，多出来的键直接忽略。
 public struct AppSettings: Codable, Equatable, Sendable {
     /// 怎么决定充到多少。默认智能：新装的人最常要的是「随时有电，又别一直满电」。
     public var mode = ChargeMode.smart
-    /// 智能模式平时停在哪。
+    /// 智能模式平时停在哪（80 到 95）。
     public var smartDailyCap = SmartPolicy.defaultDailyCap
+    /// 智能模式：记住你平时几点拔电源，离电前自动备电。关掉就只按下面的「默认拔电时间」。
+    public var learnHabits = true
+    /// 智能模式在学会之前、或者关掉学习时，按这个时间备电。固定模式里是「断电前充满」的时间。
+    public var deadlineEnabled = true
+    public var deadline = ClockTime(hour: 23, minute: 30)
+    /// 离开电源那一刻想有多少电。默认 100%。
+    public var unplugTarget = ChargePlanner.defaultTarget
+    /// 固定模式的时间段。
     public var intervals: [Interval]
     public var launchAtLogin = true
     public var guideSeen = false
     public var autoCheckUpdates = true
-    /// 每天断电的时间。开着时会在断电前按速度提前放开到离电目标。
-    public var deadlineEnabled = true
-    public var deadline = ClockTime(hour: 23, minute: 30)
-    /// 离开电源那一刻想有多少电。和每一段的日常上限分开，默认 100%。
-    public var unplugTarget = ChargePlanner.defaultTarget
-    public var heatProtection = true
     public var notifications = false
-    /// 刘海灵动岛：鼠标移到刘海、插拔电源时从刘海里展开。
+    /// 刘海灵动岛：点一下刘海展开，再点一下收起。关掉就不在刘海上画东西。
     public var notchIsland = true
+    /// 插拔电源时从刘海里弹出来，几秒后自己收。
     public var notchOnPower = true
-    /// 充电或放电时在刘海两侧常驻一点小字。会盖住刘海旁边的菜单。
+    /// 刘海两侧常驻小字（上限和充电状态）。
     public var notchEars = false
-    /// 没有刘海的屏幕上，在菜单栏正中假装有一个。
+    /// 没有刘海的屏幕上，在菜单栏正中虚拟一个。
     public var notchWithoutNotch = false
     /// 窗口质感和透明度。透明度是窗口底色透出多少桌面，0 不透，最多 0.7。
     public var look = WindowLook.frosted
@@ -60,42 +63,28 @@ public struct AppSettings: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case mode, smartDailyCap
+        case mode, smartDailyCap, learnHabits
         case intervals, launchAtLogin, guideSeen, autoCheckUpdates, deadlineEnabled, deadline, unplugTarget
-        case heatProtection, notifications, lastUpdateCheck, skippedVersion, language
+        case notifications, lastUpdateCheck, skippedVersion, language
         case notchIsland, notchOnPower, notchEars, notchWithoutNotch
         case look, transparency, dischargeOffDay
-        case lowPowerAuto
     }
 
-    /// 2.0 存的时间段没有 lowPower，全局的 lowPowerAuto 打开时按「仅用电池时开」。
+    /// 只读 discharge 这一项。旧版本的 lowPower、drift 忽略；旧版本没有放电这一项时，按关处理。
+    /// 升级不能把「只限制充电」变成「接着电源也在放电」。
     private struct StoredInterval: Decodable {
         var value: Interval?
-        var hadLowPower = false
-        var hadDischarge = false
 
         init(from decoder: Decoder) throws {
             value = try? Interval(from: decoder)
-            if let keyed = try? decoder.container(keyedBy: Interval.CodingKeys.self) {
-                hadLowPower = keyed.contains(.lowPower)
-                hadDischarge = keyed.contains(.discharge)
-            }
         }
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let legacyAuto = (try? c.decodeIfPresent(Bool.self, forKey: .lowPowerAuto)) ?? false
         if c.contains(.intervals), let stored = try? c.decode([StoredInterval].self, forKey: .intervals) {
             // 用户删光了时间段就保持空的，不偷偷换回默认。
-            intervals = stored.compactMap { item in
-                guard var value = item.value else { return nil }
-                if !item.hadLowPower && legacyAuto { value.lowPower = .battery }
-                // 旧版本没有放电这一项时不做任何推断：主动放电必须由用户自己打开。
-                // 升级不能把「只限制充电」变成「接着电源也在放电」。
-                if !item.hadDischarge { value.discharge = false }
-                return value
-            }
+            intervals = stored.compactMap(\.value)
         } else {
             intervals = Schedule.makeDefaults()
         }
@@ -107,13 +96,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         let hadMode = c.contains(.mode)
         mode = hadMode ? read(.mode, ChargeMode.smart) : .fixed
         smartDailyCap = SmartPolicy.clampDailyCap(read(.smartDailyCap, SmartPolicy.defaultDailyCap))
+        learnHabits = read(.learnHabits, true)
         launchAtLogin = read(.launchAtLogin, true)
         guideSeen = read(.guideSeen, false)
         autoCheckUpdates = read(.autoCheckUpdates, true)
         deadlineEnabled = read(.deadlineEnabled, true)
         deadline = read(.deadline, ClockTime(hour: 23, minute: 30))
         unplugTarget = ChargePlanner.clampTarget(read(.unplugTarget, ChargePlanner.defaultTarget))
-        heatProtection = read(.heatProtection, true)
         notifications = read(.notifications, false)
         notchIsland = read(.notchIsland, true)
         notchOnPower = read(.notchOnPower, true)
@@ -132,6 +121,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(mode, forKey: .mode)
         try c.encode(smartDailyCap, forKey: .smartDailyCap)
+        try c.encode(learnHabits, forKey: .learnHabits)
         try c.encode(intervals, forKey: .intervals)
         try c.encode(launchAtLogin, forKey: .launchAtLogin)
         try c.encode(guideSeen, forKey: .guideSeen)
@@ -139,7 +129,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try c.encode(deadlineEnabled, forKey: .deadlineEnabled)
         try c.encode(deadline, forKey: .deadline)
         try c.encode(unplugTarget, forKey: .unplugTarget)
-        try c.encode(heatProtection, forKey: .heatProtection)
         try c.encode(notifications, forKey: .notifications)
         try c.encode(notchIsland, forKey: .notchIsland)
         try c.encode(notchOnPower, forKey: .notchOnPower)
