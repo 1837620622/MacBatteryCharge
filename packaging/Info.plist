@@ -21,15 +21,19 @@
 	<key>CFBundleVersion</key>
 	<string>__VERSION__</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>11.0</string>
+	<string>13.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 传康Kk</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>需要弹出系统对话框，以便用管理员权限写入低电量模式。</string>
 </dict>
