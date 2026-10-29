@@ -329,7 +329,7 @@ struct JournalCard: View {
     /// 一天一根柱子：上面接电源的时长，下面用电池的时长。
     private var chart: some View {
         let days = model.journal.daysBack(Self.weeks)
-        let peak = max(1, days.map { $0.batteryHours + $0.powerHours }.max() ?? 1)
+        let peak: Double = max(1, days.map { $0.batteryHours + $0.powerHours }.max() ?? 1)
         return Chart {
             ForEach(days, id: \.day) { day in
                 BarMark(x: .value(T("日期"), String(day.day.suffix(5))), y: .value(T("接电源"), day.powerHours))
