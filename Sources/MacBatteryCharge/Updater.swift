@@ -8,11 +8,15 @@ enum UpdateState: Equatable {
     case upToDate
     /// 查到了要装的新版本，正在后台下载并核对安装包。
     case downloading(ReleaseInfo)
-    /// 下好了、核对过，等你点一下「立即安装」。
-    case ready(ReleaseInfo, URL)
-    /// 安装器在跑，会弹一次管理员密码框。
+    /// 下好了，但现在不能装（正在放电）。条件允许就自动装。
+    case waiting(ReleaseInfo, String)
+    /// 正在换成新版本。不用密码。
     case installing(ReleaseInfo)
-    /// 没成功。有版本信息时，界面给一个去下载页面的跳转。
+    /// 新版本已经装上，正在退出并重新打开。
+    case restarting(ReleaseInfo)
+    /// 「应用程序」不让直接换，要一次管理员密码。用户点了按钮才会弹。
+    case needsPassword(ReleaseInfo)
+    /// 没成功。写明原因，界面给「再试一次」。
     case failed(String, ReleaseInfo?)
 }
 

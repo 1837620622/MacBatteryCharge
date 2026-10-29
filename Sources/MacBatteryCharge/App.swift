@@ -26,6 +26,11 @@ enum Main {
             let pkg = value(after: "--pkg", in: arguments).map { URL(fileURLWithPath: $0) }
             exit(UpdateSelfTest.run(to: URL(fileURLWithPath: path), pkg: pkg, expect: value(after: "--expect", in: arguments)) ? 0 : 1)
         }
+        if let index = arguments.firstIndex(of: "--selftest-inplace") {
+            let path = index + 1 < arguments.count ? arguments[index + 1] : "selftest-inplace.txt"
+            let pkg = value(after: "--pkg", in: arguments).map { URL(fileURLWithPath: $0) }
+            exit(InPlaceSelfTest.run(to: URL(fileURLWithPath: path), pkg: pkg, expect: value(after: "--expect", in: arguments)) ? 0 : 1)
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         if let index = arguments.firstIndex(of: "--selftest-menubar") {

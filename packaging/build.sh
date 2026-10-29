@@ -32,10 +32,10 @@ iconutil -c icns "$ICONSET" -o "$ROOT/build/AppIcon.icns"
 
 # 安装器的资源。background.png 既是左边的图，也是欢迎页和结束页里的图标。
 # 上一版的 AppIcon.png 没有被打进包里（检查报缺），所以图标改用分发包引用的 background.png，每个语言目录各放一份。
-# 语言目录叫 zh_CN、zh_TW：上一版用 zh-Hans 目录时，截图里欢迎页还是英文。
+# 语言目录只用 productbuild 认得的写法：zh_CN.lproj 会被丢掉（CI 报缺），zh-Hans、zh-Hant 才会进包。
 # 没有对应语言时用顶层的页面，应用默认中文，顶层就放中文。
 INSTALLER="$ROOT/build/installer"
-INSTALLER_LANGS=(en zh_CN zh_TW)
+INSTALLER_LANGS=(en zh-Hans zh-Hant)
 rm -rf "$INSTALLER"
 mkdir -p "$INSTALLER"
 sips -z 128 128 resources/AppIcon.png --out "$INSTALLER/background.png" >/dev/null
@@ -44,7 +44,7 @@ for lang in "${INSTALLER_LANGS[@]}"; do
     cp packaging/installer/"$lang".lproj/*.html "$INSTALLER/$lang.lproj/"
     cp "$INSTALLER/background.png" "$INSTALLER/$lang.lproj/background.png"
 done
-cp packaging/installer/zh_CN.lproj/Welcome.html packaging/installer/zh_CN.lproj/Conclusion.html "$INSTALLER/"
+cp packaging/installer/zh-Hans.lproj/Welcome.html packaging/installer/zh-Hans.lproj/Conclusion.html "$INSTALLER/"
 
 # DMG 卷图标要求根目录的 Finder 信息里有「自定义图标」这一位（和 SetFile -a C 写的是同一位）。
 # FinderInfo 第 8、9 个字节的 0x0400 就是它。

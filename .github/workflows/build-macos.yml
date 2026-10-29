@@ -96,6 +96,20 @@ jobs:
           cat snapshots/selftest-update.txt || echo "没有生成更新自检报告"
           exit "$status"
 
+      # 原地更新：在临时文件夹里模拟「应用程序」，用刚打好的安装包换一次，核对换上去的版本、备份和签名。
+      - name: Self-test in-place update (sandbox copy of Applications)
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p snapshots
+          arch=$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )
+          app="build/$arch/MacBatteryCharge.app/Contents/MacOS/MacBatteryCharge"
+          version="$(tr -d '[:space:]' < VERSION)"
+          status=0
+          "$app" --selftest-inplace "$PWD/snapshots/selftest-inplace.txt" --pkg "$PWD/dist/MacBatteryCharge-$version-$arch.pkg" --expect "$version" || status=$?
+          cat snapshots/selftest-inplace.txt || echo "没有生成原地更新自检报告"
+          exit "$status"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

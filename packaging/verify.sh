@@ -33,14 +33,14 @@ for pkg in "${packages[@]}"; do
     # 顶层和每个语言目录都要有欢迎页、结束页，还有欢迎页引用的 background.png。
     for file in Welcome.html Conclusion.html background.png \
         en.lproj/Welcome.html en.lproj/Conclusion.html en.lproj/background.png \
-        zh_CN.lproj/Welcome.html zh_CN.lproj/Conclusion.html zh_CN.lproj/background.png \
-        zh_TW.lproj/Welcome.html zh_TW.lproj/Conclusion.html zh_TW.lproj/background.png; do
+        zh-Hans.lproj/Welcome.html zh-Hans.lproj/Conclusion.html zh-Hans.lproj/background.png \
+        zh-Hant.lproj/Welcome.html zh-Hant.lproj/Conclusion.html zh-Hant.lproj/background.png; do
         [[ -f "$tmp/x/Resources/$file" ]] || { show_resources; fail "${name}：缺 Resources/$file"; }
     done
-    for page in Welcome.html en.lproj/Welcome.html zh_CN.lproj/Welcome.html zh_TW.lproj/Welcome.html; do
+    for page in Welcome.html en.lproj/Welcome.html zh-Hans.lproj/Welcome.html zh-Hant.lproj/Welcome.html; do
         grep -q 'src="background.png"' "$tmp/x/Resources/$page" || { show_resources; fail "${name}：$page 没有引用图标"; }
     done
-    grep -q '充电上限' "$tmp/x/Resources/zh_CN.lproj/Welcome.html" || fail "${name}：中文欢迎页不是中文"
+    grep -q '充电上限' "$tmp/x/Resources/zh-Hans.lproj/Welcome.html" || fail "${name}：中文欢迎页不是中文"
     grep -q 'Charge Limit' "$tmp/x/Resources/en.lproj/Welcome.html" || fail "${name}：英文欢迎页不是英文"
 
     app_info="$(find "$tmp/x" -path '*/MacBatteryCharge.app/Contents/Info.plist' -print -quit)"

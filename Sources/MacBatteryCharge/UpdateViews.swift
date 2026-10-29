@@ -1,8 +1,8 @@
 import SwiftUI
 import BatteryCore
 
-/// 有新版本时放在主窗口最上面。自动下载、等你安装、正在装、没装成，都在这一块说清楚。
-/// 这里不会把人领去网页上下载；失败了就写明原因，给「再试一次」。
+/// 有新版本时放在主窗口最上面。下载、安装、重新打开都是自动的，这里只说清楚现在在做什么；
+/// 要你做点什么的时候（「应用程序」不让直接换、或者没成功）才给按钮。
 struct UpdateBanner: View {
     @ObservedObject var model: AppModel
 
@@ -10,33 +10,43 @@ struct UpdateBanner: View {
         switch model.update {
         case .downloading(let release):
             card(title: T("正在下载新版本 %@", ["\(release.version)"]),
-                 detail: T("在后台下载，下完会在这里提示你。"),
+                 detail: T("在后台下载，下完会自动装上，不用管它。"),
                  symbol: "arrow.down.circle.fill", tint: .accentColor) {
-                EmptyView()
+                ProgressView().controlSize(.small)
             }
-        case .ready(let release, _):
+        case .waiting(let release, let reason):
             card(title: T("新版本 %@ 已经下好", ["\(release.version)"]),
-                 detail: T("点「立即安装」就装上。要输入一次管理员密码；设置和数据都保留，装完会自己重新打开。"),
-                 symbol: "checkmark.circle.fill", tint: .green) {
-                HStack(spacing: 10) {
-                    Button(T("立即安装")) { model.installUpdate() }
-                        .buttonStyle(.borderedProminent)
-                    Button(T("跳过这个版本")) { model.skip(release) }
-                        .controlSize(.small)
-                }
+                 detail: reason,
+                 symbol: "clock.fill", tint: .orange) {
+                EmptyView()
             }
         case .installing(let release):
-            card(title: T("正在安装 %@", ["\(release.version)"]),
-                 detail: T("在弹出的窗口里输入管理员密码。装完会自己重新打开。"),
+            card(title: T("正在换成新版本 %@", ["\(release.version)"]),
+                 detail: T("设置和数据都保留。装完会自己重新打开，不用重启电脑。"),
                  symbol: "gearshape.2.fill", tint: .accentColor) {
+                ProgressView().controlSize(.small)
+            }
+        case .restarting(let release):
+            card(title: T("新版本 %@ 已经装好", ["\(release.version)"]),
+                 detail: T("正在重新打开。"),
+                 symbol: "checkmark.circle.fill", tint: .green) {
                 EmptyView()
             }
+        case .needsPassword(let release):
+            card(title: T("新版本 %@ 已经下好", ["\(release.version)"]),
+                 detail: T("「应用程序」不让直接换，需要输入一次管理员密码。设置和数据都保留。"),
+                 symbol: "lock.fill", tint: .orange) {
+                Button(T("输入密码，装上新版本")) { model.installWithPassword() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
         case .failed(let text, let release?):
-            card(title: T("没能自动更新到 %@", ["\(release.version)"]),
+            card(title: T("没能更新到 %@", ["\(release.version)"]),
                  detail: text,
                  symbol: "exclamationmark.triangle.fill", tint: .orange) {
                 Button(T("再试一次")) { model.downloadUpdate(release) }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
             }
         default:
             EmptyView()

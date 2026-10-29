@@ -50,4 +50,10 @@ if [ -f "$PLIST" ] && [ -x "$HELPER_SRC" ]; then
     fi
     /bin/launchctl bootstrap system "$PLIST" 2>/dev/null
 fi
+
+# 「应用程序」里的 App 交给装它的这个用户：之后的自动更新只换这个文件夹里的东西，不用管理员密码。
+OWNER="$(/usr/bin/stat -f%Su /dev/console 2>/dev/null)"
+if [ -d "$APP" ] && [ -n "$OWNER" ] && [ "$OWNER" != "root" ]; then
+    /usr/sbin/chown -R "$OWNER" "$APP" 2>/dev/null
+fi
 exit 0

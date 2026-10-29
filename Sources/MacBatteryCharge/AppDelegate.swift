@@ -53,8 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             .sink { [weak island] _ in Task { @MainActor in island?.configure() } }
         model.start()
 
-        LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
+        let launchedByAgent = CommandLine.arguments.contains("--background")
+        Task.detached(priority: .utility) { LoginItem.removeLegacyAgent(launchedByAgent: launchedByAgent) }
         model.syncLogin()
+        // 上一版留下的东西（换版本时的备份、旧的临时文件）在这里收拾掉，不用重启电脑。
+        Task { @MainActor in
+            let notes = await Task.detached(priority: .utility) { Migration.run() }.value
+            notes.forEach { Log.write("info", $0) }
+        }
 
         if selfTestReport != nil {
             Task { @MainActor [weak self] in
@@ -71,9 +77,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return true
     }
 
+    /// 退出前要把电源接回来。这一步交给帮手，不在主线程上等：帮手卡住时，界面不能跟着卡死，
+    /// 最多等 1.5 秒就照样退出，帮手的租约到期会自己接回电源。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.needsHelperRelease else { return .terminateNow }
+        let once = ReplyOnce()
+        Task { @MainActor in
+            await model.releaseHelperForQuit()
+            once.run { NSApp.reply(toApplicationShouldTerminate: true) }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1500))
+            once.run { NSApp.reply(toApplicationShouldTerminate: true) }
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model.saveNow()
-        model.releaseHelper()
         Log.endSession()
     }
 
@@ -136,11 +157,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         apply.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: T("关于充电上限"), action: #selector(showAbout), keyEquivalent: "").target = self
-        menu.addItem(withTitle: T("退出充电上限"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: T("退出充电上限"), action: #selector(quitApp), keyEquivalent: "q").target = self
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
     @objc private func openFromMenu() { showPopover() }
+    @objc private func quitApp() { NSApp.terminate(nil) }
     @objc private func toggleTopUp() { model.toggleTopUp() }
     @objc private func applyFromMenu() { model.applyNow() }
 
@@ -284,6 +306,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.model.refresh() }
         })
+    }
+}
+
+/// 退出请求只回答一次：帮手先回来、或者限时到了，两边都会来回答，只认先到的那个。
+@MainActor
+final class ReplyOnce {
+    private var done = false
+
+    func run(_ reply: () -> Void) {
+        guard !done else { return }
+        done = true
+        reply()
     }
 }
 

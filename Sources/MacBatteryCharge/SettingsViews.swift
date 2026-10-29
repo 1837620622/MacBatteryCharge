@@ -8,8 +8,6 @@ struct SettingsView: View {
     /// 点「完成」：弹窗里换回主页。
     var onClose: () -> Void
 
-    private static let issuesURL = URL(string: "https://github.com/1837620622/MacFullBar/issues")!
-
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -74,9 +72,9 @@ struct SettingsView: View {
 
                 Section(T("关于")) {
                     LabeledContent(T("版本"), value: Installation.version)
-                    Toggle(T("自动检查，并在后台下好新版本"), isOn: $model.settings.autoCheckUpdates)
+                    Toggle(T("自动检查，并自动装上新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
-                    Button(T("反馈问题")) { NSWorkspace.shared.open(Self.issuesURL) }
+                    Button(T("反馈问题")) { model.sendFeedback() }
                     Button(T("打开数据文件夹")) { model.openDataFolder() }
                     Link(T("项目主页"), destination: AppInfo.homepage)
                     Text(T("作者 %@", ["\(AppInfo.author)"]))
@@ -129,26 +127,41 @@ struct SettingsView: View {
             Text(T("正在下载新版本 %@", ["\(release.version)"]))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .ready(let release, _):
-            Text(T("新版本 %@ 已经下好，到窗口里点「立即安装」。", ["\(release.version)"]))
+        case .waiting(let release, let reason):
+            Text(T("新版本 %@ 已经下好。%@", ["\(release.version)", reason]))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .installing(let release):
-            Text(T("正在安装 %@", ["\(release.version)"]))
+            Text(T("正在换成新版本 %@，装完自动重新打开。", ["\(release.version)"]))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        case .restarting(let release):
+            Text(T("新版本 %@ 已经装好，正在重新打开。", ["\(release.version)"]))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .needsPassword(let release):
+            VStack(alignment: .leading, spacing: 6) {
+                Text(T("新版本 %@ 已经下好，需要输入一次管理员密码才能换上。", ["\(release.version)"]))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(T("输入密码，装上新版本")) { model.installWithPassword() }
+                    .controlSize(.small)
+            }
         case .failed(let text, let release):
             VStack(alignment: .leading, spacing: 6) {
                 Text(text)
                     .font(.caption)
                     .foregroundStyle(.orange)
                 if let release {
-                    Button(T("去下载页面")) { model.openDownloadPage(release) }
-                        .controlSize(.small)
+                    HStack(spacing: 8) {
+                        Button(T("再试一次")) { model.downloadUpdate(release) }
+                        Button(T("去下载页面")) { model.openDownloadPage(release) }
+                    }
+                    .controlSize(.small)
                 }
             }
         }
-        Button(T("检查更新")) { model.checkForUpdates(userInitiated: true) }
+        Button(T("立即检查")) { model.checkForUpdates(userInitiated: true) }
             .disabled(model.update == .checking)
     }
 }

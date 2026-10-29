@@ -33,7 +33,7 @@ enum Snapshot {
                         to: file("main-smart-dark-\(tag).png")) && ok
             if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v3.1.1","assets":[]}"#.utf8)) {
                 let ready = sampleModel(mode: .smart, language: language)
-                ready.loadPreviewUpdate(.ready(release, URL(fileURLWithPath: "/tmp/MacBatteryCharge-3.1.1-arm64.pkg")))
+                ready.loadPreviewUpdate(.needsPassword(release))
                 ok = render(RootView(model: ready), size: RootView.popoverSize, appearance: .aqua,
                             to: file("main-update-ready-\(tag).png")) && ok
                 let failed = sampleModel(mode: .smart, language: language)
