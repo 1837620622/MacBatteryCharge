@@ -57,7 +57,7 @@ public enum ChargePolicy {
     /// 没有漂移时，电量要超过上限这么多才开始放。苹果的上限会停在“几个百分点”之内，
     /// 留出这一段，免得 80 和 82 之间反复放、反复充。
     public static let dischargeMargin = 3
-    /// 苹果给的工作温度上限是 35°C。超过就停止往上充，降到 33°C 才恢复。
+    /// 电池温度超过 35°C 就停止往上充，降到 33°C 才恢复。35 和 33 是我们选的保守值，不是苹果规定的电池温度。
     public static let heatOn = 35.0
     public static let heatOff = 33.0
 

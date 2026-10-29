@@ -189,9 +189,15 @@ struct AboutRow: View {
                 .font(.caption)
             }
             Spacer(minLength: 0)
-            Link(destination: AppInfo.homepage) {
-                Label("GitHub", systemImage: "arrow.up.right.square")
-                    .font(.caption)
+            HStack(spacing: 12) {
+                Link(destination: AppInfo.sponsorPage) {
+                    Label("赞助", systemImage: "heart")
+                        .font(.caption)
+                }
+                Link(destination: AppInfo.homepage) {
+                    Label("GitHub", systemImage: "arrow.up.right.square")
+                        .font(.caption)
+                }
             }
         }
         .accessibilityElement(children: .combine)
