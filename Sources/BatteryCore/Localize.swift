@@ -503,5 +503,7 @@ public enum Table {
         "没写上，等一会再试": "Could not write it. Trying again shortly.",
         "帮手": "helper",
         "帮手没有把电源接回来。请重启这台 Mac 之后再卸载。": "The helper did not reconnect power. Restart this Mac before uninstalling.",
+        "帮手现在没有响应，而上次看到电源是断开的。请重启这台 Mac 之后再卸载。": "The helper is not responding, and power was last seen disconnected. Restart this Mac before uninstalling.",
+        "这个版本没有附校验码，不能自动安装。请到 GitHub 手动下载。": "This release has no checksum, so it can't be installed automatically. Download it from GitHub manually.",
     ]
 }

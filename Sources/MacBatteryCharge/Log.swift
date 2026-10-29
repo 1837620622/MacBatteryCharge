@@ -42,6 +42,8 @@ public enum Log {
         } else {
             try? data.write(to: currentURL)
         }
+        // 日志里有调用栈和版本，别让同一台机器上的其他用户读到。
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: currentURL.path)
     }
 
     private static func rotate() {
