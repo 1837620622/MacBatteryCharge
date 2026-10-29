@@ -1,6 +1,7 @@
 import Foundation
 import IOKit
 import IOKit.ps
+import IOKit.pwr_mgt
 import BatteryCore
 import SMCBridge
 
@@ -73,7 +74,7 @@ func readFlag(_ keys: [(key: String, off: [UInt8], on: [UInt8])]) -> Bool? {
     var buffer = [UInt8](repeating: 0, count: 32)
     let count = SMCReadBytes(first.key, &buffer, buffer.count)
     guard count > 0 else { return nil }
-    return Array(buffer[0..<count]) == first.on
+    return Array(buffer[0..<Int(count)]) == first.on
 }
 
 // MARK: 电量
