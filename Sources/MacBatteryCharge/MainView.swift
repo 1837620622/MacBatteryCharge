@@ -5,47 +5,64 @@ import BatteryCore
 /// 主窗口：上面是现在的电量和正在做什么，中间是三种模式，下面是临时充满。
 /// 其它设置收进右上角的齿轮。
 struct RootView: View {
+    /// 弹窗里的页面：主页，或者设置。第一次的引导由 model.showGuide 决定，盖在最上面。
+    enum Page { case main, settings }
+
+    /// 菜单栏弹窗的大小。
+    static let popoverSize = NSSize(width: 400, height: 680)
+
     @ObservedObject var model: AppModel
-    @State private var showSettings = false
+    @State private var page: Page
+
+    init(model: AppModel, page: Page = .main) {
+        self.model = model
+        _page = State(initialValue: page)
+    }
 
     var body: some View {
         ZStack {
             WindowBackdrop(look: model.settings.look, transparency: model.settings.transparency)
-            VStack(spacing: 0) {
-                header
+            if model.showGuide {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        if let message = model.message {
-                            MessageLine(message: message) { model.dismissMessage() }
-                        }
-                        if let error = model.scheduleError {
-                            MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
-                        }
-                        UpdateBanner(model: model)
-                        tonightCard
-                        Picker(T("模式"), selection: modeBinding) {
-                            ForEach(ChargeMode.allCases, id: \.self) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        Text(model.settings.mode.tagline)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        modePanel
-                        footer
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
+                    GuideView(model: model)
                 }
+            } else if page == .settings {
+                SettingsView(model: model) { page = .main }
+            } else {
+                mainPage
             }
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView(model: model)
-        }
-        .sheet(isPresented: $model.showGuide) {
-            GuideView(model: model)
+    }
+
+    private var mainPage: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let message = model.message {
+                        MessageLine(message: message) { model.dismissMessage() }
+                    }
+                    if let error = model.scheduleError {
+                        MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
+                    }
+                    UpdateBanner(model: model)
+                    tonightCard
+                    Picker(T("模式"), selection: modeBinding) {
+                        ForEach(ChargeMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(model.settings.mode.tagline)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    modePanel
+                    footer
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
+            }
         }
     }
 
@@ -78,7 +95,7 @@ struct RootView: View {
             }
             Spacer(minLength: 0)
             Button {
-                showSettings = true
+                page = .settings
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15, weight: .medium))

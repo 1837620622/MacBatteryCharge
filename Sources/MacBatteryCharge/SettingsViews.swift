@@ -5,7 +5,8 @@ import BatteryCore
 /// 设置：语言、登录、通知、外观、刘海、高级和关于。平时用不到的都收在这里。
 struct SettingsView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    /// 点「完成」：弹窗里换回主页。
+    var onClose: () -> Void
 
     private static let issuesURL = URL(string: "https://github.com/1837620622/MacFullBar/issues")!
 
@@ -15,7 +16,7 @@ struct SettingsView: View {
                 Text(T("设置"))
                     .font(.title3.weight(.semibold))
                 Spacer(minLength: 0)
-                Button(T("完成")) { dismiss() }
+                Button(T("完成")) { onClose() }
                     .keyboardShortcut(.defaultAction)
             }
             .padding(16)
@@ -85,7 +86,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 460, height: 640)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder private var helperRow: some View {

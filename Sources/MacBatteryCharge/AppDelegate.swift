@@ -12,10 +12,12 @@ extension Notification.Name {
 let showWindowNotification = Notification.Name("com.macbatterycharge.show")
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let model = AppModel()
     private var statusItem: NSStatusItem?
-    private var window: NSWindow?
+    private var popover: NSPopover?
+    /// 找不到菜单栏图标时（被挤掉、被刘海挡住），弹窗挂在屏幕右上角这个看不见的小窗上。
+    private var fallbackAnchor: NSWindow?
     private var powerSource: CFRunLoopSource?
     private var observers: [NSObjectProtocol] = []
     private var island: NotchIsland?
@@ -51,11 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         LoginItem.removeLegacyAgent(launchedByAgent: CommandLine.arguments.contains("--background"))
         model.syncLogin()
 
-        if !background { showWindow() }
+        if !background { showPopover() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showWindow()
+        showPopover()
         return true
     }
 
@@ -66,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func showFromOtherProcess(_ notification: Notification) {
-        showWindow()
+        showPopover()
     }
 
     // MARK: 菜单栏
@@ -77,7 +79,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let button = item.button {
             button.target = self
             button.action = #selector(statusClicked(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            // 在按下时响应。弹窗开着时点图标，点击本身就会先把弹窗收掉；要是等松开再判断，就会又被打开。
+            button.sendAction(on: [.leftMouseDown, .rightMouseDown])
             button.imagePosition = .imageOnly
         }
         statusItem = item
@@ -87,13 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         let battery = model.battery
+        let charging = battery.flow == .charging
         // 两秒读一次时，图标没变就不重画。
-        let key = "\(model.menuTop)|\(model.menuBottom)|\(battery.percent ?? -1)|\(battery.flow == .charging)"
+        let key = "\(battery.percent ?? -1)|\(charging)"
         if key != lastIconKey {
             lastIconKey = key
-            button.image = MenuBarIcon.image(top: model.menuTop, bottom: model.menuBottom,
-                                             level: battery.percent.map { Double($0) / 100 },
-                                             charging: battery.flow == .charging)
+            button.image = MenuBarIcon.image(percent: battery.percent, charging: charging)
         }
         let percent = battery.percent.map { T("电量 %@%，", ["\($0)"]) } ?? ""
         button.setAccessibilityLabel(T("充电上限 %@，%@%@", ["\(model.menuTop)", "\(percent)", "\(model.menuBottom)"]))
@@ -102,10 +104,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func statusClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+        if event?.type == .rightMouseDown || event?.modifierFlags.contains(.control) == true {
             showMenu(from: sender)
         } else {
-            toggleWindow()
+            togglePopover()
         }
     }
 
@@ -128,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
-    @objc private func openFromMenu() { showWindow() }
+    @objc private func openFromMenu() { showPopover() }
     @objc private func toggleTopUp() { model.toggleTopUp() }
     @objc private func applyFromMenu() { model.applyNow() }
 
@@ -149,77 +151,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ])
     }
 
-    // MARK: 窗口
+    // MARK: 弹窗
 
-    private func toggleWindow() {
-        if let window, window.isVisible, window.isKeyWindow, NSApp.isActive {
-            window.performClose(nil)
+    /// 再点一下图标：弹窗开着就收起，没开就打开。
+    private func togglePopover() {
+        if let popover, popover.isShown {
+            popover.performClose(nil)
         } else {
-            showWindow()
+            showPopover()
         }
     }
 
-    func showWindow() {
-        let window = self.window ?? makeWindow()
-        self.window = window
+    /// 从菜单栏图标下面打开弹窗。每次都从主页开始，不停在上次的设置页。
+    func showPopover() {
+        let popover = self.popover ?? makePopover()
+        self.popover = popover
+        if !popover.isShown {
+            popover.contentViewController = makeContent()
+            popover.contentSize = RootView.popoverSize
+            if let button = statusItem?.button, button.window != nil {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            } else {
+                showFallbackPopover(popover)
+            }
+        }
         if #available(macOS 14, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
-        window.makeKeyAndOrderFront(nil)
+        popover.contentViewController?.view.window?.makeKey()
         model.windowVisible = true
         model.windowDidOpen()
     }
 
-    private func makeWindow() -> NSWindow {
-        let hosting = NSHostingView(rootView: RootView(model: model))
+    private func makePopover() -> NSPopover {
+        let popover = NSPopover()
+        // 点别处就收起，和系统自带的菜单栏弹窗一样。
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+        return popover
+    }
+
+    private func makeContent() -> NSHostingController<RootView> {
+        let hosting = NSHostingController(rootView: RootView(model: model))
         hosting.sizingOptions = []
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 760),
-                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+        return hosting
+    }
+
+    /// 图标找不到时：在屏幕右上角放一个看不见的小窗，弹窗挂在它下面。
+    private func showFallbackPopover(_ popover: NSPopover) {
+        guard let screen = NSScreen.main else { return }
+        let anchor = fallbackAnchor ?? makeFallbackAnchor()
+        fallbackAnchor = anchor
+        anchor.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 200, y: screen.visibleFrame.maxY - 1))
+        anchor.orderFrontRegardless()
+        if let view = anchor.contentView {
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+        }
+    }
+
+    private func makeFallbackAnchor() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1, height: 1), styleMask: .borderless,
                               backing: .buffered, defer: false)
-        window.title = T("充电上限")
-        window.titlebarAppearsTransparent = true
-        // 底色由界面自己画：纯色就是不透明的窗口色，磨砂和玻璃是模糊的桌面。
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = false
+        window.ignoresMouseEvents = true
         window.isReleasedWhenClosed = false
-        window.contentView = hosting
-        window.minSize = NSSize(width: 400, height: 520)
-        window.maxSize = NSSize(width: 560, height: 4000)
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
-        window.delegate = self
-        if !window.setFrameUsingName("MainWindow") { place(window) }
-        window.setFrameAutosaveName("MainWindow")
         return window
     }
 
-    /// 第一次打开时放在菜单栏图标下面。
-    private func place(_ window: NSWindow) {
-        guard let buttonWindow = statusItem?.button?.window, let screen = buttonWindow.screen ?? NSScreen.main else {
-            window.center()
-            return
-        }
-        let anchor = buttonWindow.frame
-        let visible = screen.visibleFrame
-        var frame = window.frame
-        frame.size.height = min(frame.height, visible.height - 16)
-        frame.origin.x = min(max(anchor.midX - frame.width / 2, visible.minX + 8), visible.maxX - frame.width - 8)
-        frame.origin.y = visible.maxY - frame.height - 8
-        window.setFrame(frame, display: false)
-    }
-
-    func windowDidChangeOcclusionState(_ notification: Notification) { updateWindowVisibility() }
-    func windowDidMiniaturize(_ notification: Notification) { updateWindowVisibility() }
-    func windowDidDeminiaturize(_ notification: Notification) { updateWindowVisibility() }
-
-    /// 窗口真的看得见（没被盖住、没最小化）才算。看不见时不跑动画，也不用每 2 秒读数。
-    private func updateWindowVisibility(closing: Bool = false) {
-        guard let window, !closing else {
-            model.windowVisible = false
-            return
-        }
-        model.windowVisible = window.isVisible && !window.isMiniaturized && window.occlusionState.contains(.visible)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        updateWindowVisibility(closing: true)
+    func popoverDidClose(_ notification: Notification) {
+        fallbackAnchor?.orderOut(nil)
+        model.windowVisible = false
         model.saveNow()
         model.editingID = nil
     }

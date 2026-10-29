@@ -43,7 +43,7 @@ struct GuideView: View {
             }
         }
         .padding(24)
-        .frame(width: 460)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 问一句平时几点拔电源。先显示的是默认值，用户可以改，不用猜。

@@ -251,7 +251,7 @@ final class NotchIsland {
     }
 
     private func openWindow() {
-        (NSApp.delegate as? AppDelegate)?.showWindow()
+        (NSApp.delegate as? AppDelegate)?.showPopover()
     }
 }
 
