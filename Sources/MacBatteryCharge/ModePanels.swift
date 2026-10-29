@@ -21,6 +21,7 @@ struct SmartPanel: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .frame(maxWidth: .infinity)
             }
 
             Card {
@@ -35,6 +36,8 @@ struct SmartPanel: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
                 habitLine
                 DisclosureGroup(isExpanded: $showDetails) {
                     VStack(alignment: .leading, spacing: 10) {
@@ -108,6 +111,7 @@ struct FixedPanel: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }

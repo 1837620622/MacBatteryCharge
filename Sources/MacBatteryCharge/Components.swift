@@ -26,6 +26,8 @@ struct LiquidDisc: View, Animatable {
         let w = size.width
         let h = size.height
         let surface = h * (1 - min(max(level, 0), 1))
+        // 底色：水没到的那一块也要看得出是个圆盘，不能是白的。
+        gc.fill(Path(ellipseIn: CGRect(origin: .zero, size: size)), with: .color(.primary.opacity(0.07)))
 
         if level > 0 {
             let amplitude: Double = flow == .charging ? 3.4 : (flow == .discharging ? 2.6 : 1.8)

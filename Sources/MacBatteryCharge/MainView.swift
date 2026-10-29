@@ -27,11 +27,18 @@ struct RootView: View {
                     GuideView(model: model)
                 }
             } else if page == .settings {
-                SettingsView(model: model) { page = .main }
+                SettingsView(model: model) { switchPage(.main) }
+                    .transition(.opacity)
             } else {
                 mainPage
+                    .transition(.opacity)
             }
         }
+    }
+
+    /// 主页和设置之间淡入淡出，不硬切。
+    private func switchPage(_ next: Page) {
+        withAnimation(.easeInOut(duration: 0.2)) { page = next }
     }
 
     private var mainPage: some View {
@@ -41,6 +48,7 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if let message = model.message {
                         MessageLine(message: message) { model.dismissMessage() }
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     // 时间表有错要改好才会消失，所以这一行没有「关掉」。
                     if let error = model.scheduleError {
@@ -67,16 +75,19 @@ struct RootView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 18)
+                .animation(.easeInOut(duration: 0.25), value: model.message)
             }
+            .scrollIndicators(.hidden)
         }
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .top, spacing: 16) {
             ZStack {
                 LiquidDisc(level: Double(model.battery.percent ?? 0) / 100, limit: model.decision.limit,
                            tint: ringColor, flow: model.displayFlow, live: model.liveMotion)
                     .frame(width: 96, height: 96)
+                    .animation(.easeInOut(duration: 0.8), value: model.battery.percent)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1))
                 Text(percentText)
@@ -100,10 +111,11 @@ struct RootView: View {
             }
             Spacer(minLength: 0)
             Button {
-                page = .settings
+                switchPage(.settings)
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15, weight: .medium))
+                    .padding(.top, 2)
             }
             .buttonStyle(.plain)
             .help(T("设置"))
@@ -154,14 +166,18 @@ struct RootView: View {
     }
 
     @ViewBuilder private var modePanel: some View {
-        switch model.settings.mode {
-        case .smart:
-            SmartPanel(model: model)
-        case .fixed:
-            FixedPanel(model: model)
-        case .full:
-            FullPanel()
+        Group {
+            switch model.settings.mode {
+            case .smart:
+                SmartPanel(model: model)
+            case .fixed:
+                FixedPanel(model: model)
+            case .full:
+                FullPanel()
+            }
         }
+        .id(model.settings.mode)
+        .transition(.opacity)
     }
 
     /// 临时充满旁边那句话：固定模式说「这一段」，智能说「拔掉电源」。
@@ -188,7 +204,9 @@ struct RootView: View {
     }
 
     private var modeBinding: Binding<ChargeMode> {
-        Binding(get: { model.settings.mode }, set: { model.settings.mode = $0 })
+        Binding(get: { model.settings.mode }, set: { mode in
+            withAnimation(.easeInOut(duration: 0.25)) { model.settings.mode = mode }
+        })
     }
 
     private var percentText: String {

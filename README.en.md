@@ -2,7 +2,7 @@
 
 **Easier on your battery, and full enough when you unplug.**
 
-Charge Limit is a small macOS menu bar app. Most of the time it holds the battery around 80%, so it doesn't sit full for hours. It learns the time you usually unplug and fills the battery up before then. Free and open source.
+Charge Limit is a macOS menu bar battery charge limit app for MacBook, on Apple silicon and Intel. Most of the time it holds the battery around 80%, so it doesn't sit full for hours, which helps protect battery health. It learns the time you usually unplug and fills the battery up before then. Free and open source.
 
 English · [繁體中文](README.zh-Hant.md) · [简体中文](README.md)
 
