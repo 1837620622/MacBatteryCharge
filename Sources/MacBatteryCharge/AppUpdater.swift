@@ -138,6 +138,8 @@ enum AppUpdater {
     /// 解开安装包，取出里面的 App。只用当前用户的权限，不要密码。
     static func unpack(_ package: URL, version: String) throws -> URL {
         let directory = folder.appendingPathComponent("unpacked", isDirectory: true)
+        // pkgutil 要求父文件夹已经存在、目标还没有。父文件夹可能已经被清掉了，所以先建。
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: directory)
         let result = Shell.run("/usr/sbin/pkgutil", ["--expand-full", package.path, directory.path])
         guard result.status == 0 else {

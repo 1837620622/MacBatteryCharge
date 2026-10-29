@@ -36,8 +36,15 @@ jobs:
             exit 0
           fi
           for pkg in dist/*.pkg; do
-            printf '%s' "$UPDATE_SIGNING_KEY" | swift packaging/sign-update.swift "$pkg" > "$pkg.sig"
-            echo "已签名 $(basename "$pkg")"
+            # 先签到临时文件，签成功才改名：失败时不留下空的 .sig（发版那一步会看它在不在、是不是空的）。
+            sig="$(mktemp)"
+            if printf '%s' "$UPDATE_SIGNING_KEY" | swift packaging/sign-update.swift "$pkg" > "$sig"; then
+              mv "$sig" "$pkg.sig"
+              echo "已签名 $(basename "$pkg")"
+            else
+              rm -f "$sig"
+              exit 1
+            fi
           done
 
       # 签名失败也照样跑下面的检查：签名是发版的门槛（Publish 一步还会核对），检查和自检的结果不该被它挡住。
@@ -148,6 +155,6 @@ jobs:
             exit 0
           fi
           for pkg in dist/*.pkg; do
-            [[ -f "$pkg.sig" ]] || { echo "缺少签名：$pkg。先设置 UPDATE_SIGNING_KEY 再发版。"; exit 1; }
+            [[ -s "$pkg.sig" ]] || { echo "缺少签名（或签名是空的）：$pkg。先设置 UPDATE_SIGNING_KEY 再发版。"; exit 1; }
           done
           gh release create "v$VERSION" dist/* --title "v$VERSION" --notes-file packaging/release-notes.md
