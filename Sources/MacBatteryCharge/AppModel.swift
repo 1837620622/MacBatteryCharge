@@ -314,9 +314,10 @@ final class AppModel: ObservableObject {
 
     private func updateDischarge() {
         let external = battery.externalConnected || helper?.adapterEnabled == false
+        // 温度读不到就不放电（Calma 也是这样）：放电时电池会发热，看不见温度就不冒这个险。
         discharging = ChargePolicy.shouldDischarge(
             previous: discharging, percent: battery.percent, decision: decision,
-            enabled: helperUsable && schedule.discharge(at: minute) && !dischargeOffToday,
+            enabled: helperUsable && schedule.discharge(at: minute) && !dischargeOffToday && battery.celsius != nil,
             external: external, resumeAt: schedule.resumeAt(at: minute))
     }
 
