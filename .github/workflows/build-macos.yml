@@ -3,6 +3,7 @@ name: Build macOS packages
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -14,8 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+
       - name: Test and package arm64 and Intel
         run: bash packaging/build.sh
+
+      - name: Snapshots
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          app="build/$( [[ "$(uname -m)" == arm64 ]] && echo arm64 || echo intel )/MacBatteryCharge.app"
+          "$app/Contents/MacOS/MacBatteryCharge" --snapshot "$PWD/snapshots"
+          ls -l snapshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snapshots
+          path: snapshots/*
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
@@ -23,6 +44,7 @@ jobs:
           path: dist/*
 
       - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
