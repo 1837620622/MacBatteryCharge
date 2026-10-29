@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Foundation
 import BatteryCore
 
@@ -67,6 +68,55 @@ enum Benchmark {
             if !check.ok { ok = false }
         }
         return ok
+    }
+
+    /// `--bench-live`：真的把窗口打开，让液体盘、电流圆点、2 秒一次的刷新都跑起来，量这段时间占了多少 CPU。
+    /// 用假数据，不碰系统。窗口在没有显示器的机器上可能不被当成“看得见”，那样量到的只是下限。
+    @MainActor
+    static func live(seconds: Double = 8, budgetPercent: Double = 40) -> Bool {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        app.finishLaunching()
+        let model = Snapshot.sampleModel()
+        model.windowVisible = true
+        let hosting = NSHostingView(rootView: RootView(model: model))
+        hosting.sizingOptions = []
+        let window = NSWindow(contentRect: NSRect(x: 80, y: 80, width: 420, height: 760),
+                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.orderFrontRegardless()
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+
+        let cpuBefore = cpuSeconds()
+        let start = Date()
+        var lastTick = start
+        var ticks = 0
+        while Date().timeIntervalSince(start) < seconds {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            if Date().timeIntervalSince(lastTick) >= 2, let reading = model.reading {
+                lastTick = Date()
+                ticks += 1
+                // 和真实的 2 秒一次读数一样，让整个界面重新算一遍。
+                model.loadPreview(reading, history: model.history, minute: model.minute)
+            }
+        }
+        let wall = Date().timeIntervalSince(start)
+        let percent = (cpuSeconds() - cpuBefore) / wall * 100
+        window.orderOut(nil)
+        let ok = percent <= budgetPercent
+        print(String(format: "%@ 窗口打开 %.0f 秒（%d 次刷新）：CPU %.1f%%（预算 %.0f%%），内存 %.0f MB",
+                     (ok ? "ok  " : "超了") as NSString, wall, ticks, percent, budgetPercent, Double(physFootprint()) / 1_048_576))
+        return ok
+    }
+
+    private static func cpuSeconds() -> Double {
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        func seconds(_ value: timeval) -> Double { Double(value.tv_sec) + Double(value.tv_usec) / 1_000_000 }
+        return seconds(usage.ru_utime) + seconds(usage.ru_stime)
     }
 
     private static func physFootprint() -> UInt64 {

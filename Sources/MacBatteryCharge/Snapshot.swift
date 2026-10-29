@@ -109,6 +109,7 @@ enum Snapshot {
     }
 
     /// 按默认作息模拟 24 小时：白天停在 80%，21:00 后充到 100%，23:30 断电用电池，06:00 来电。
+    @MainActor
     static func sampleHistory(ending end: Date, schedule: Schedule) -> ChargeHistory {
         var history = ChargeHistory()
         var percent = 80.0

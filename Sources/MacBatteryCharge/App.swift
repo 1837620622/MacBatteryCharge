@@ -12,6 +12,9 @@ enum Main {
         if arguments.contains("--bench") {
             exit(Benchmark.run() ? 0 : 1)
         }
+        if arguments.contains("--bench-live") {
+            exit(Benchmark.live() ? 0 : 1)
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
