@@ -1,0 +1,102 @@
+name: Build macOS battery charge installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and sign on macOS 26
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check Python and shell code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q tools tests
+          for file in scripts/*.command scripts/*.sh; do bash -n "$file"; done
+          python3 -m unittest discover -s tests -v
+
+      - name: Verify runner OS supports charge limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sw_vers -productVersion)"
+          echo "macOS: $version"
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          if (( major < 26 || (major == 26 && minor < 4) )); then
+            echo 'macOS 26.4 or later required for system battery charge-limit action' >&2
+            exit 1
+          fi
+          test -x /usr/bin/shortcuts
+
+      - name: Generate unsigned shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/charge_shortcuts.py --output build/unsigned
+          for f in build/unsigned/*.shortcut; do plutil -lint "$f"; done
+
+      - name: Sign both shortcuts with Apple
+        shell: bash
+        env:
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+        run: |
+          set -euo pipefail
+          mkdir -p build/signed
+          for name in 白天充电上限80 晚间充电上限100; do
+            src="build/unsigned/${name}.unsigned.shortcut"
+            dst="build/signed/${name}.shortcut"
+            if ! /usr/bin/shortcuts sign --mode anyone --input "$src" --output "$dst"; then
+              echo 'XML signing failed. Retrying after binary plist conversion.'
+              plutil -convert binary1 -o "build/unsigned/${name}.binary.shortcut" "$src"
+              /usr/bin/shortcuts sign --mode anyone --input "build/unsigned/${name}.binary.shortcut" --output "$dst"
+            fi
+            test -s "$dst"
+            echo "Signed $name ($(wc -c < "$dst") bytes)"
+          done
+
+      - name: Create installation ZIP and verify integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/package_release.py --repo . --signed build/signed --out dist
+          cd dist && shasum -a 256 MacBatteryCharge-macOS-Installer.zip > SHA256SUMS.txt
+          unzip -t MacBatteryCharge-macOS-Installer.zip
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacBatteryCharge-macOS-Installer
+          path: |
+            dist/MacBatteryCharge-macOS-Installer.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v1.0.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" \
+            dist/MacBatteryCharge-macOS-Installer.zip \
+            dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "MacBatteryCharge $tag" \
+            --notes "每日 06:00 上限 80%，21:00 上限 100%。23:30 断电前留出约 2.5 小时补电；断电后上限保持 100%，可接充电宝。基于 Apple 原生快捷指令和 launchd。需要 macOS 26.4+ 与 Apple 芯片 Mac。已通过构建与静态检查；安装后仍需在本机验证电池设置。"
