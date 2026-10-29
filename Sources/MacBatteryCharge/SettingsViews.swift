@@ -75,6 +75,7 @@ struct SettingsView: View {
                     Toggle(T("自动检查，并自动装上新版本"), isOn: $model.settings.autoCheckUpdates)
                     updateRow
                     Button(T("反馈问题")) { model.sendFeedback() }
+                    Button(T("再看引导")) { model.replayGuide(); onClose() }
                     Button(T("打开数据文件夹")) { model.openDataFolder() }
                     Link(T("项目主页"), destination: AppInfo.homepage)
                     Text(T("作者 %@", ["\(AppInfo.author)"]))
