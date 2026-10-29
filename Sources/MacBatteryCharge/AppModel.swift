@@ -186,13 +186,13 @@ final class AppModel: ObservableObject {
         reading = value
         minute = currentMinute(value.date)
         let battery = value.battery
-
-        heatActive = settings.heatProtection
-            ? ChargePolicy.heatActive(previous: heatActive, celsius: battery.celsius, external: battery.externalConnected)
-            : false
-
         // 帮手断开电源适配器放电时，系统会说“没接电源”，这里仍然算接着。
         let external = battery.externalConnected || value.helper?.adapterEnabled == false
+
+        heatActive = settings.heatProtection
+            ? ChargePolicy.heatActive(previous: heatActive, celsius: battery.celsius, external: external)
+            : false
+
         if wasExternal != external && reading != nil && lastFlow != nil { onPlugChange?(external) }
         // 临时充满和提前放开都在拔掉电源时结束。
         if wasExternal && !external {
