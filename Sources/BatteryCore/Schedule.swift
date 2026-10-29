@@ -125,6 +125,7 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
         limit = try container.decode(Int.self, forKey: .limit)
         lowPower = (try? container.decodeIfPresent(LowPowerChoice.self, forKey: .lowPower)) ?? .off
         discharge = ((try? container.decodeIfPresent(Bool.self, forKey: .discharge)) ?? nil) ?? false
+        drift = ((try? container.decodeIfPresent(Int.self, forKey: .drift)) ?? nil) ?? 0
     }
 
     public func encode(to encoder: Encoder) throws {
