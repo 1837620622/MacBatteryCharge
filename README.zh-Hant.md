@@ -6,6 +6,11 @@
 
 [English](README.en.md) · [簡體中文](README.md) · 繁體中文
 
+<p align="center">
+  <img src="docs/images/main-smart-zh.png" height="460" alt="主視窗：智慧模式">
+  <img src="docs/images/settings-zh.png" height="460" alt="設定視窗">
+</p>
+
 ## 三種模式
 
 視窗頂上選一個：
@@ -29,6 +34,10 @@
 - **主視窗**：電量、現在在做什麼、三種模式、臨時充滿。
 - **設定**（右上角齒輪）：語言（簡體中文、繁體中文、English，預設跟隨系統）、登入時開啟、通知、外觀、劉海靈動島、高階。
 - **劉海靈動島**（有劉海的 Mac）：點一下劉海展開，再點一下收回去；插拔電源時會自己彈出來，幾秒後收起。
+
+<p align="center">
+  <img src="docs/images/island-expanded-zh.png" width="420" alt="劉海靈動島展開">
+</p>
 
 ## 安裝
 
@@ -73,11 +82,11 @@ bash packaging/build.sh                                 # 編譯兩種晶片，�
 .build/release/MacBatteryCharge --snapshot snapshots    # 用假資料輸出介面截圖
 ```
 
-設計文件：[設計要求](docs/設計要求.md)、[介面](docs/介面.md)、[調研](docs/調研.md)。版本變化見 [CHANGELOG](CHANGELOG.md)。
+設計文件：[設計要求](docs/设计要求.md)、[介面](docs/界面.md)、[調研](docs/调研.md)。版本變化見 [CHANGELOG](CHANGELOG.md)。
 
 ## 贊助與合作
 
-充電上限免費開源，所有功能都不收費。個人贊助自願、金額隨意，不影響任何功能。企業合作、定製、技術支援見 [企業合作](docs/企業合作.md)。
+充電上限免費開源，所有功能都不收費。個人贊助自願、金額隨意，不影響任何功能。企業合作、定製、技術支援見 [企業合作](docs/企业合作.md)。
 
 聯絡：微信 1837620622（請備註來意）。
 
@@ -87,4 +96,4 @@ bash packaging/build.sh                                 # 編譯兩種晶片，�
 
 ## 許可證
 
-GNU GPL-3.0，見 [LICENSE](LICENSE)。© 2026 傳康Kk。
+GNU GPL-3.0，見 [LICENSE](LICENSE)。© 2026 传康Kk。

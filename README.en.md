@@ -6,6 +6,11 @@ Charge Limit is a small macOS menu bar app. By day it holds the battery at aroun
 
 English · [简体中文](README.md) · [繁體中文](README.zh-Hant.md)
 
+<p align="center">
+  <img src="docs/images/main-smart-en.png" height="460" alt="Main window: Smart mode">
+  <img src="docs/images/settings-en.png" height="460" alt="Settings window">
+</p>
+
 ## Three modes
 
 Pick one at the top of the window:
@@ -29,6 +34,10 @@ All three modes have heat protection: when the battery runs hot (above 35°C), t
 - **Main window**: charge level, what it is doing right now, the three modes and "top up now".
 - **Settings** (the gear in the top-right corner): language (English, 简体中文, 繁體中文; follows the system by default), launch at login, notifications, appearance, the notch island, advanced options.
 - **Notch island** (Macs with a notch): click the notch to open it, click again to close it. It also pops out when you plug or unplug, and closes after a few seconds.
+
+<p align="center">
+  <img src="docs/images/island-expanded-en.png" width="420" alt="Notch island expanded">
+</p>
 
 ## Install
 

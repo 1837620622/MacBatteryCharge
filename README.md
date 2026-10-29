@@ -6,6 +6,11 @@
 
 [English](README.en.md) · [繁體中文](README.zh-Hant.md) · 简体中文
 
+<p align="center">
+  <img src="docs/images/main-smart-zh.png" height="460" alt="主窗口：智能模式">
+  <img src="docs/images/settings-zh.png" height="460" alt="设置窗口">
+</p>
+
 ## 三种模式
 
 窗口顶上选一个：
@@ -29,6 +34,10 @@
 - **主窗口**：电量、现在在做什么、三种模式、临时充满。
 - **设置**（右上角齿轮）：语言（简体中文、繁體中文、English，默认跟随系统）、登录时打开、通知、外观、刘海灵动岛、高级。
 - **刘海灵动岛**（有刘海的 Mac）：点一下刘海展开，再点一下收回去；插拔电源时会自己弹出来，几秒后收起。
+
+<p align="center">
+  <img src="docs/images/island-expanded-zh.png" width="420" alt="刘海灵动岛展开">
+</p>
 
 ## 安装
 
