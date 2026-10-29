@@ -1,42 +1,39 @@
-# 充电上限 3.1.0
+# 充电上限 3.1.1
 
-这一版把功能收窄，让平时用得上的部分更清楚，并修了安装包里看不到应用图标的问题。
+这一版加了自动更新，菜单栏改成弹窗，图标换成和 App 图标一样的五格电池，并修了一批检查时发现的问题。
 
 ## 变化
 
-- **三种模式都能用，行为写得清楚。**
-  - 智能（默认）：平时停在日常上限（80%，可选 85、90、95）；记住你平时几点拔电源，离电前充到目标（100%，可选 80、90）。
-  - 固定：一天分段，每段一个上限；没排到的时间按 100% 充；可以选「断电前充满」。
-  - 一直充满：接电源就充到 100%。
-- **记住你的充电习惯。** 每天第一次接着电源满 30 分钟以上、然后拔掉，记作一次；记满 3 次就能说出你平时几点拔电源。可以重新学习，也可以关掉学习。
-- **过热保护对所有模式都生效。** 电池偏热时最高停在 80%，之前「一直充满」模式会漏掉这一条，现在修了。
-- **修正：** 智能模式不再显示「已提前放开」的通知（那是固定模式的逻辑）；检查更新指向正确的仓库。
-- **界面重做。** 主窗口一屏看完状态、模式和临时充满；设置收进右上角的齿轮。引导改成三步。
-- **去掉** 低电量模式、漂移、应用内安装和卸载、诊断复制。检查更新只打开发布页，下载你自己装。
-- **安装包。** DMG 显示应用图标；PKG 的安装器里有欢迎页和应用图标，并限定芯片架构。
-- **多语言。** 简体中文、繁體中文、English，默认跟随系统。
+- **自动更新。** 查到新版本后在后台下好安装包，用 GitHub 给的 SHA-256 核对。主窗口最上面提示：点「立即安装」，输入一次管理员密码，装完退出并打开新版本，设置和数据都保留。下载或安装没成功时写明原因，并给「去下载页面」。
+- **菜单栏是弹窗。** 点图标从图标下面弹出主界面，点别处或再点图标收起。设置和引导在弹窗里换页。
+- **新图标。** 菜单栏图标是五格电池：电量够几格就填几格，右边是百分比，充电时带闪电。安装器的欢迎页和结束页用 2 倍图标。
+- **界面。** 主窗口最上面放「今晚」的计划；智能模式的「习惯和细节」收进折叠区；时间选择器跟着界面语言显示；放电选项单独一行。
+- **修正。** 习惯时长按小数累计；「平时几点拔」票数并列时固定取较早的一个；一直充满模式的预计时间不再借用固定时间表；智能模式的临时充满一直到拔掉电源为止；灵动岛面板看不见时不再装鼠标监听。
 
 ## 升级
 
-旧版的设置文件照常读取。没有模式这一项的老文件，仍按固定模式（时间段）运行，不会悄悄换成智能。老文件里的低电量和漂移设置会被忽略。
+直接覆盖安装即可，设置保留。
 
 ## 还没有在真机上完整测过
 
-CI 能编译、跑单元测试、打包，但没法替你在每一台真机上测。请在你自己的 Mac 上确认：智能模式会不会按时放开；固定时间段是否按设定；插拔电源时刘海弹出是否正常。遇到问题请到 Issues 反馈。
-
+CI 能编译、跑测试、打包和生成截图，但自动更新的下载、密码框、安装和重新打开，菜单栏点击弹窗，灵动岛的点击和插拔弹出，都还没在真机上跑过。遇到问题请到 Issues 反馈。
 
 ---
 
 ## English
 
-Charge Limit 3.1.0 narrows the app to what people use every day, makes the three modes behave as described, and fixes missing app icons in the installers.
+Charge Limit 3.1.1 adds automatic updates, turns the menu bar item into a popover, and switches the icon to the five-bar battery from the app icon. It also fixes several issues found in review.
 
-- **Three modes, clearly defined.** Smart (default) holds at the daily limit and learns when you usually unplug. Fixed uses a schedule of limits. Always full charges to 100%.
-- **Learns your habits.** The first long plugged-in session each day (30+ minutes) that ends in an unplug counts. After three, it knows your usual unplug time. You can learn again or turn learning off.
-- **Heat protection applies to every mode**, including Always full.
-- **Interface redone.** One main window; settings behind the gear icon. Three-step guide.
-- **Removed:** low-power mode, drift, in-app installer and uninstaller, diagnostics export. Update checks now open the release page.
-- **Installers.** The DMG shows the app icon. The PKG installer has a welcome page with the icon and limits installation to the matching chip.
-- **Languages:** 简体中文, 繁體中文, English, following the system by default.
+- **Automatic updates.** New versions download in the background and are checked against GitHub's SHA-256. The main window shows the update at the top: click “Install Now”, enter your administrator password once, and the app installs the new version and reopens. Your settings and data are kept. If the download or install fails, the reason is shown with an “Open Download Page” link.
+- **Menu bar popover.** Click the icon to open the window below it; click elsewhere or the icon again to close it. Settings and the guide page inside the popover.
+- **New icon.** The menu bar icon is a five-bar battery that fills with your charge, with the percentage beside it and a bolt while charging. The installer's welcome and conclusion pages use a 2× icon.
+- **Interface.** Tonight's plan sits at the top of the main window. Habit details are collapsed in smart mode. Time pickers follow the interface language. The discharge option has its own line.
+- **Fixes.** Habit durations accumulate as fractions. Ties in the usual unplug time resolve to the earlier one. Always-full forecasts no longer borrow the fixed schedule. Smart-mode top-up runs until you unplug. The island no longer installs mouse monitors while its panel is hidden.
 
-Settings from older versions still load. A file without a mode stays on Fixed. Old low-power and drift settings are ignored.
+## Upgrading
+
+Install over 3.1.0 as usual. Settings are kept.
+
+## Not yet fully tested on real hardware
+
+CI compiles, runs the tests, packages the apps, and renders the screenshots. The update download, password prompt, install and relaunch, the menu bar popover click behaviour, and the island's click and plug-in behaviour have not yet been run on a real Mac. Please report problems in Issues.
