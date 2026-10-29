@@ -9,6 +9,8 @@ public enum LimitReason: Equatable, Sendable {
     case heat
     /// 智能模式：平时停在日常上限。
     case smart
+    /// 一直充满模式：一直 100%。
+    case full
 
     public var title: String {
         switch self {
@@ -18,6 +20,7 @@ public enum LimitReason: Equatable, Sendable {
         case .deadline: return T("离电前备电")
         case .heat: return T("过热保护")
         case .smart: return T("智能")
+        case .full: return T("一直充满")
         }
     }
 }
@@ -48,11 +51,18 @@ public enum ChargePolicy {
             decision.limit = 100
             decision.reason = .topUp
         }
-        if heat && decision.limit > 80 {
-            decision.limit = 80
-            decision.reason = .heat
-        }
-        return decision
+        return applyHeat(decision, heat: heat)
+    }
+
+    /// 过热保护在所有模式里都生效：电池偏热时最高停在 80%，哪怕是一直充满或者临时充满。
+    public static let heatLimit = 80
+
+    public static func applyHeat(_ decision: LimitDecision, heat: Bool) -> LimitDecision {
+        guard heat, decision.limit > heatLimit else { return decision }
+        var result = decision
+        result.limit = heatLimit
+        result.reason = .heat
+        return result
     }
 
     /// 放电最低到这里。低于它就不再断开电源，帮手那边也守着同一个下限（Calma 也是 20%）。

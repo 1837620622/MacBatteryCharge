@@ -1,237 +1,84 @@
 import SwiftUI
 import BatteryCore
 
-struct ScheduleCard: View {
+/// 固定模式的时间段。每一段：开始、结束、停在多少。没排到的时间按 100%。
+struct ScheduleEditor: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        FoldCard(T("时间表"), key: "schedule", summary: model.limitLine) {
-            TimelineBar(schedule: model.schedule, minute: model.minute,
-                        selectedIndex: model.schedule.intervals.firstIndex { $0.id == model.editingID }) { index in
-                let id = model.schedule.intervals[index].id
-                withAnimation(.easeInOut(duration: 0.2)) { model.editingID = model.editingID == id ? nil : id }
+        Card {
+            HStack {
+                Text(T("时间段"))
+                    .font(.headline)
+                Spacer(minLength: 0)
+                Button(T("恢复默认")) { model.resetSchedule() }
+                    .controlSize(.small)
             }
-            Text(T("空档按 100%"))
-                .font(.caption2)
+            Text(T("每一段停在这里的上限。没排到的时间按 100% 充。"))
+                .font(.callout)
                 .foregroundStyle(.secondary)
-            if model.settings.intervals.isEmpty {
-                Text(T("没有时间段，全天 100%。"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            VStack(spacing: 0) {
-                ForEach($model.settings.intervals) { $item in
-                    let id = item.id
-                    let number = (model.settings.intervals.firstIndex { $0.id == id } ?? 0) + 1
-                    IntervalRow(item: $item, number: number,
-                                isCurrent: model.currentInterval?.id == id && model.scheduleError == nil,
-                                isEditing: model.editingID == id,
-                                helperReady: model.helperUsable,
-                                onInstallHelper: { model.installHelper() },
-                                onTap: { withAnimation(.easeInOut(duration: 0.2)) { model.editingID = model.editingID == id ? nil : id } },
-                                onDelete: { withAnimation { model.removeInterval(id) } },
-                                onCommit: { model.sortIntervals() })
-                    if id != model.settings.intervals.last?.id {
-                        Divider()
-                    }
+            ForEach($model.settings.intervals) { binding in
+                IntervalRow(item: binding, dischargeAvailable: model.helperUsable) {
+                    model.removeInterval(binding.wrappedValue.id)
                 }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
-                    withAnimation { model.addInterval() }
+                    model.addInterval()
                 } label: {
                     Label(T("加一段"), systemImage: "plus")
                 }
+                .controlSize(.small)
                 .disabled(!model.canAddInterval)
                 if let hint = model.addHint {
-                    Text(hint).font(.caption).foregroundStyle(.secondary)
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Button(T("恢复默认")) { withAnimation { model.resetSchedule() } }
-                    .help(T("06:00–21:00 停在 80%，21:00–06:00 放开到 100%。"))
             }
-            .controlSize(.small)
         }
     }
 }
 
+/// 一段的一行：时间范围、上限、要不要用电池放电。
 struct IntervalRow: View {
     @Binding var item: Interval
-    var number: Int
-    var isCurrent: Bool
-    var isEditing: Bool
-    var helperReady: Bool
-    var onInstallHelper: () -> Void
-    var onTap: () -> Void
-    var onDelete: () -> Void
-    var onCommit: () -> Void
-
-    private var subtitle: String? {
-        var parts: [String] = []
-        if item.discharge && item.limit < 100 { parts.append(T("放电")) }
-        if item.activeDrift > 0 { parts.append(T("漂 %@%", ["\(item.activeDrift)"])) }
-        if item.lowPower != .off { parts.append(T("低电量%@", ["\(item.lowPower.shortTitle)"])) }
-        if isCurrent { parts.append(T("现在")) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
+    var dischargeAvailable: Bool
+    var remove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button(action: onTap) {
-                HStack(spacing: 10) {
-                    Text("\(number)")
-                        .font(.caption.weight(.bold))
-                        .monospacedDigit()
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(isCurrent ? Color.accentColor : Color.primary.opacity(0.1)))
-                        .foregroundStyle(isCurrent ? Color.white : Color.secondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.rangeText).monospacedDigit()
-                        if let subtitle {
-                            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Text("\(item.limit)%")
-                        .font(.body.weight(.semibold))
-                        .monospacedDigit()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isEditing ? 90 : 0))
+        HStack(spacing: 8) {
+            DatePicker("", selection: ClockPicker.binding($item.start), displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .fixedSize()
+            Text("–")
+                .foregroundStyle(.secondary)
+            DatePicker("", selection: ClockPicker.binding($item.end), displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .fixedSize()
+            Picker("", selection: $item.limit) {
+                ForEach(Schedule.allowedLimits, id: \.self) { value in
+                    Text("\(value)%").tag(value)
                 }
-                .contentShape(Rectangle())
+            }
+            .labelsHidden()
+            .fixedSize()
+            Spacer(minLength: 0)
+            if dischargeAvailable {
+                Toggle(T("放电"), isOn: $item.discharge)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    .help(T("接着电源、电量高于上限时，用电池放到上限再停住。"))
+            }
+            Button(action: remove) {
+                Image(systemName: "minus.circle")
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(T("第 %@ 段，%@，上限 %@%", ["\(number)", "\(item.rangeText)", "\(item.limit)"]))
-            .accessibilityHint(isEditing ? T("收起") : T("展开编辑"))
-
-            if isEditing {
-                IntervalEditor(item: $item, helperReady: helperReady, onInstallHelper: onInstallHelper, onDelete: onDelete)
-                    .onDisappear(perform: onCommit)
-            }
+            .help(T("删掉这一段"))
         }
-        .padding(.vertical, 8)
-    }
-}
-
-struct IntervalEditor: View {
-    @Binding var item: Interval
-    var helperReady: Bool
-    var onInstallHelper: () -> Void
-    var onDelete: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TimeField(title: T("开始"), time: $item.start)
-            TimeField(title: T("结束"), time: $item.end)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(T("上限")).font(.subheadline).foregroundStyle(.secondary)
-                Picker(T("上限"), selection: $item.limit) {
-                    ForEach(Schedule.allowedLimits, id: \.self) { Text("\($0)%").tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            if item.limit < 100 {
-                ToggleRow(title: T("高于上限时放电"),
-                          info: T("超过上限 3% 才开始放，放到上限就接电，最低 20%。需要放电帮手。"),
-                          isOn: $item.discharge)
-                if item.discharge && !helperReady {
-                    Button(T("安装放电帮手…"), action: onInstallHelper).controlSize(.small)
-                }
-                if item.discharge {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Text(T("漂移")).font(.subheadline).foregroundStyle(.secondary)
-                            InfoButton(text: T("关：到上限就停住。开：到上限开始放，掉到下面这么多才接电，电量在中间自己漂，少在满电里待着。"))
-                        }
-                        Picker(T("漂移"), selection: $item.drift) {
-                            Text(T("关")).tag(0)
-                            ForEach(Interval.driftChoices, id: \.self) { Text(T("掉 %@%", ["\($0)"])).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(T("低电量")).font(.subheadline).foregroundStyle(.secondary)
-                    InfoButton(text: T("只在点「立即应用」时改，会弹系统的管理员密码框。"))
-                }
-                Picker(T("低电量"), selection: $item.lowPower) {
-                    ForEach(LowPowerChoice.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            HStack {
-                Spacer()
-                Button(role: .destructive, action: onDelete) {
-                    Label(T("删除"), systemImage: "trash")
-                }
-                .controlSize(.small)
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
-    }
-}
-
-/// 小时、分钟两个下拉，旁边一个表盘按钮。
-struct TimeField: View {
-    var title: String
-    @Binding var time: ClockTime
-    @State private var showDial = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(title).frame(width: 36, alignment: .leading)
-            Picker(T("%@小时", ["\(title)"]), selection: hour) {
-                ForEach(0..<24, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-            }
-            .labelsHidden()
-            .frame(width: 66)
-            Text(":").foregroundStyle(.secondary)
-            Picker(T("%@分钟", ["\(title)"]), selection: minute) {
-                ForEach(0..<60, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-            }
-            .labelsHidden()
-            .frame(width: 66)
-            Button {
-                showDial.toggle()
-            } label: {
-                Image(systemName: "clock")
-            }
-            .help(T("用表盘选时间"))
-            .accessibilityLabel(T("用表盘选%@时间", ["\(title)"]))
-            .popover(isPresented: $showDial, arrowEdge: .bottom) {
-                VStack(spacing: 8) {
-                    DatePicker(title, selection: date, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                    Text(time.text).font(.title3.weight(.semibold)).monospacedDigit()
-                }
-                .padding(14)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var hour: Binding<Int> {
-        Binding(get: { time.hour }, set: { time = ClockTime(hour: $0, minute: time.minute) })
-    }
-
-    private var minute: Binding<Int> {
-        Binding(get: { time.minute }, set: { time = ClockTime(hour: time.hour, minute: $0) })
-    }
-
-    private var date: Binding<Date> {
-        Binding(get: {
-            Calendar.current.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: Date()) ?? Date()
-        }, set: {
-            time = ClockTime(minuteOfDay: currentMinute($0))
-        })
+        .padding(.vertical, 2)
     }
 }

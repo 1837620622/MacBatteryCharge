@@ -155,29 +155,6 @@ enum Installation {
     }
 
     /// 关掉登录项，删掉配置，把程序移到废纸篓。充电上限和低电量保持现在的值。
-    static func uninstall() -> Result<Void, InstallError> {
-        try? SMAppService.mainApp.unregister()
-        LoginItem.removeLegacyAgent(launchedByAgent: false)
-        try? FileManager.default.removeItem(at: AppSettings.directory)
-        var targets = [bundleURL]
-        if bundleURL.standardizedFileURL != applicationsURL, FileManager.default.fileExists(atPath: applicationsURL.path) {
-            targets.append(applicationsURL)
-        }
-        for target in targets where isBundleSafeToDelete(target) {
-            do {
-                try FileManager.default.trashItem(at: target, resultingItemURL: nil)
-            } catch {
-                let script = "/bin/rm -rf \(Shell.quoted(target.path)); /usr/sbin/pkgutil --forget com.macbatterycharge.pkg >/dev/null 2>&1; true"
-                switch Shell.runAsAdmin(script, prompt: T("充电上限要从“应用程序”里删掉自己。")) {
-                case .ok: continue
-                case .cancelled: return .failure(.cancelled)
-                case .failed(let text): return .failure(.failed(text))
-                }
-            }
-        }
-        return .success(())
-    }
-
     private static func isBundleSafeToDelete(_ url: URL) -> Bool {
         url.pathExtension == "app" && url.lastPathComponent.hasPrefix("MacBatteryCharge") && !url.path.contains("/AppTranslocation/")
     }

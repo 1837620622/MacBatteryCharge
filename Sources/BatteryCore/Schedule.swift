@@ -51,81 +51,34 @@ public struct ClockTime: Hashable, Comparable, Codable, Sendable {
     }
 }
 
-/// 这一段的低电量模式。
-public enum LowPowerChoice: String, CaseIterable, Codable, Sendable {
-    case off
-    case on
-    case battery
-
-    public var title: String {
-        switch self {
-        case .off: return T("这段不用")
-        case .on: return T("这段一直开")
-        case .battery: return T("仅用电池时开")
-        }
-    }
-
-    public var shortTitle: String {
-        switch self {
-        case .off: return T("不用")
-        case .on: return T("一直开")
-        case .battery: return T("仅电池")
-        }
-    }
-
-    /// pmset 的 -b（电池）和 -c（电源）两个值。
-    public var modes: (battery: Int, ac: Int) {
-        switch self {
-        case .off: return (0, 0)
-        case .on: return (1, 1)
-        case .battery: return (1, 0)
-        }
-    }
-
-    public init(from decoder: Decoder) throws {
-        let text = try decoder.singleValueContainer().decode(String.self)
-        self = LowPowerChoice(rawValue: text) ?? .off
-    }
-
-    /// 不认识的写法按「不用」。
-    public static func normalized(_ text: String?) -> LowPowerChoice {
-        text.flatMap(LowPowerChoice.init(rawValue:)) ?? .off
-    }
-}
-
-/// 一段时间：[start, end)。结束早于开始表示跨过午夜。
+/// 固定模式里的一段时间：[start, end)。结束早于开始表示跨过午夜。
 public struct Interval: Identifiable, Hashable, Codable, Sendable {
     public var id = UUID()
     public var start: ClockTime
     public var end: ClockTime
+    /// 这一段停在多少。只能是 `Schedule.allowedLimits` 里的值。
     public var limit: Int
-    public var lowPower: LowPowerChoice
-    /// 接着电源、电量高于上限时，先用电池放到上限再停住。要装放电帮手。
+    /// 接着电源、电量高于上限时，用电池放到上限再停住。要装放电帮手，只在固定模式里生效。默认关。
     public var discharge: Bool
-    /// 漂移范围：0 为关。打开后，电量超过上限就放电，掉到 上限 − 范围 才接电，中间自己漂。
-    public var drift: Int
 
-    public init(start: ClockTime, end: ClockTime, limit: Int, lowPower: LowPowerChoice = .off, discharge: Bool = false, drift: Int = 0) {
+    public init(start: ClockTime, end: ClockTime, limit: Int, discharge: Bool = false) {
         self.start = start
         self.end = end
         self.limit = limit
-        self.lowPower = lowPower
         self.discharge = discharge
-        self.drift = drift
     }
 
     enum CodingKeys: String, CodingKey {
-        case start, end, limit, lowPower, discharge, drift
+        case start, end, limit, discharge
     }
 
+    /// 旧版本存过的 lowPower、drift 两个字段直接忽略：低电量模式和漂移已经去掉了。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         start = try container.decode(ClockTime.self, forKey: .start)
         end = try container.decode(ClockTime.self, forKey: .end)
         limit = try container.decode(Int.self, forKey: .limit)
-        lowPower = (try? container.decodeIfPresent(LowPowerChoice.self, forKey: .lowPower)) ?? .off
         discharge = ((try? container.decodeIfPresent(Bool.self, forKey: .discharge)) ?? nil) ?? false
-        drift = ((try? container.decodeIfPresent(Int.self, forKey: .drift)) ?? nil) ?? 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -133,21 +86,11 @@ public struct Interval: Identifiable, Hashable, Codable, Sendable {
         try container.encode(start, forKey: .start)
         try container.encode(end, forKey: .end)
         try container.encode(limit, forKey: .limit)
-        try container.encode(lowPower, forKey: .lowPower)
         try container.encode(discharge, forKey: .discharge)
-        try container.encode(drift, forKey: .drift)
     }
 
-    /// 漂移只在这一段放电时才有效，别的情况一律当作关。
-    public static let driftChoices = [5, 10]
-    public var activeDrift: Int {
-        discharge && limit < 100 && Self.driftChoices.contains(drift) ? drift : 0
-    }
-
-    /// 放电时接电的电量。没有漂移就是上限本身。
-    public var resumeAt: Int {
-        activeDrift > 0 ? max(limit - activeDrift, ChargePolicy.dischargeFloor) : limit
-    }
+    /// 放电时接电的电量。就是上限本身：放到上限就接电。
+    public var resumeAt: Int { limit }
 
     public var length: Int { start.minutes(until: end) }
     public var wrapsMidnight: Bool { end.minuteOfDay < start.minuteOfDay }
@@ -225,7 +168,6 @@ public struct Schedule: Equatable, Sendable {
 
     public func isGap(at minute: Int) -> Bool { slot(minute) < 0 }
     public func limit(at minute: Int) -> Int { interval(at: minute)?.limit ?? 100 }
-    public func lowPower(at minute: Int) -> LowPowerChoice { interval(at: minute)?.lowPower ?? .off }
     public func discharge(at minute: Int) -> Bool { interval(at: minute)?.discharge ?? false }
     public func resumeAt(at minute: Int) -> Int { interval(at: minute)?.resumeAt ?? 100 }
 
@@ -297,12 +239,11 @@ public struct Schedule: Equatable, Sendable {
         return nil
     }
 
-    /// 06:00 来电后停在 80%。21:00 放开到 100%，给 23:30 断电前留出约 2.5 小时。
-    /// 主动放电默认关：用户只装了这个软件时，不应该在不知情的时候看着电量往下掉。
+    /// 06:00 到 21:00 停在 80%，21:00 到次日 06:00 放开到 100%。主动放电默认关。
     public static func makeDefaults() -> [Interval] {
         [
-            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80, lowPower: .off),
-            Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100, lowPower: .battery),
+            Interval(start: ClockTime(hour: 6, minute: 0), end: ClockTime(hour: 21, minute: 0), limit: 80),
+            Interval(start: ClockTime(hour: 21, minute: 0), end: ClockTime(hour: 6, minute: 0), limit: 100),
         ]
     }
 }

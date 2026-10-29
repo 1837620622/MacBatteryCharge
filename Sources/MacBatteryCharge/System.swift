@@ -111,19 +111,16 @@ struct SystemReading: Sendable {
     var battery: BatterySnapshot
     var memory: MemorySnapshot
     var chargeLimit: ChargeLimitState
-    var lowPower: LowPowerState?
     var thermal: ProcessInfo.ThermalState
     var date: Date
     var helper: HelperStatus? = nil
 }
 
 enum SystemReaders {
-    /// lowPowerAge：pmset 要起一个进程，窗口没开时 10 分钟读一次就够。
-    static func read(lowPowerAge: TimeInterval = 0) -> SystemReading {
+    static func read() -> SystemReading {
         let helper = FileManager.default.fileExists(atPath: HelperInfo.socketPath) ? HelperClient.status() : nil
         return SystemReading(battery: battery(), memory: memory(), chargeLimit: ChargeBridge.read(),
-                             lowPower: lowPower(maxAge: lowPowerAge), thermal: ProcessInfo.processInfo.thermalState,
-                             date: Date(), helper: helper)
+                             thermal: ProcessInfo.processInfo.thermalState, date: Date(), helper: helper)
     }
 
     static func battery() -> BatterySnapshot {
@@ -179,43 +176,10 @@ enum SystemReaders {
                               pressure: Int(pressure))
     }
 
-    private static let lowPowerLock = NSLock()
-    nonisolated(unsafe) private static var lowPowerCache: (value: LowPowerState?, at: Date)?
-
-    static func lowPower(maxAge: TimeInterval = 0) -> LowPowerState? {
-        lowPowerLock.lock()
-        defer { lowPowerLock.unlock() }
-        if maxAge > 0, let cache = lowPowerCache, Date().timeIntervalSince(cache.at) < maxAge { return cache.value }
-        let result = Shell.run("/usr/bin/pmset", ["-g", "custom"])
-        let value = result.status == 0 ? LowPowerState.parse(custom: result.out) : nil
-        lowPowerCache = (value, Date())
-        return value
-    }
 
     static var isAppleSilicon: Bool {
         var value: Int32 = 0
         var size = MemoryLayout<Int32>.size
         return sysctlbyname("hw.optional.arm64", &value, &size, nil, 0) == 0 && value == 1
-    }
-}
-
-enum LowPowerWriter {
-    enum Outcome: Equatable {
-        case done
-        case cancelled
-        case failed(String)
-    }
-
-    /// 只在点「立即应用」时调用。系统会弹出自己的管理员密码框，密码不经过本软件。
-    static func apply(_ choice: LowPowerChoice, key: String, hasBattery: Bool) -> Outcome {
-        let modes = choice.modes
-        var commands: [String] = []
-        if hasBattery { commands.append("/usr/bin/pmset -b \(key) \(modes.battery)") }
-        commands.append("/usr/bin/pmset -c \(key) \(modes.ac)")
-        switch Shell.runAsAdmin(commands.joined(separator: "; "), prompt: T("充电上限要按这一段的设置修改低电量模式。")) {
-        case .ok: return .done
-        case .cancelled: return .cancelled
-        case .failed(let text): return .failed(text)
-        }
     }
 }

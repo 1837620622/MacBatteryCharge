@@ -49,28 +49,57 @@ final class JournalTests: XCTestCase {
     }
 
     /// 拔插只在当天第一次记，白天反复插拔不把习惯冲散。
-    func testFirstUnplugOnly() {
-        var journal = HabitJournal()
-        var previous = sample(0, percent: 100, external: true)
-        journal.absorb(previous, previous: nil, day: "2026-10-29")
-        for (index, minute) in [600, 700, 800].enumerated() {
-            let unplugged = sample(minute, percent: 90 - index, external: false)
-            journal.absorb(unplugged, previous: previous, day: "2026-10-29")
-            previous = unplugged
-            let plugged = sample(minute + 10, percent: 90 - index, external: true)
-            journal.absorb(plugged, previous: previous, day: "2026-10-29")
-            previous = plugged
+    /// 每 5 分钟一个读数，按顺序一段一段接着喂，中间的插拔要能被看见。
+    private func feed(_ journal: inout HabitJournal, _ segments: [(from: Int, to: Int, external: Bool)]) {
+        var previous: ChargeSample?
+        for segment in segments {
+            for minute in stride(from: segment.from, to: segment.to, by: 5) {
+                let current = sample(minute, percent: 90, external: segment.external)
+                journal.absorb(current, previous: previous, day: "2026-10-29")
+                previous = current
+            }
         }
-        XCTAssertEqual(journal.today?.unplug, HabitJournal.minuteOfDay(minutes(600)), "只认当天第一次")
-        XCTAssertEqual(journal.unplugMinutes.count, 1)
     }
 
-    /// 学拔电时间：同一档里出现最多的那次。
-    func testLearnedUnplug() {
+    /// 接着电源满 30 分钟才算一次「离开电源」；当天只记第一次。
+    func testFirstLongUnplugOnly() {
         var journal = HabitJournal()
-        journal.unplugMinutes = [18 * 60 + 40, 18 * 60 + 41, 18 * 60 + 39, 9 * 60]
-        XCTAssertEqual(journal.learnedUnplug()?.text, "18:39")
-        XCTAssertNil(HabitJournal().learnedUnplug(), "没有记录不猜")
+        feed(&journal, [
+            (540, 600, true),    // 9:00-10:00 接电，充了一小时
+            (600, 605, false),   // 10:00 拔掉
+            (605, 700, true),    // 挪回来又接上
+            (700, 720, false),   // 又拔掉，但当天已经记过了
+        ])
+        let expected = HabitJournal.minuteOfDay(minutes(600))
+        XCTAssertEqual(journal.today?.unplug, expected, "只认当天第一次")
+        XCTAssertEqual(journal.unplugMinutes, [expected])
+    }
+
+    /// 接电不到 30 分钟就拔掉（挪个地方、插拔一下）不当作作息。
+    func testShortSessionIsNotAnUnplug() {
+        var journal = HabitJournal()
+        feed(&journal, [(540, 560, true), (560, 600, false)])   // 只接了 20 分钟
+        XCTAssertNil(journal.today?.unplug)
+        XCTAssertTrue(journal.unplugMinutes.isEmpty, "短暂接电不记")
+    }
+
+    /// 两次读数隔了很久（程序没在跑）：不知道拔掉的确切时刻，不记。
+    func testLongGapIsNotAnUnplug() {
+        var journal = HabitJournal()
+        journal.absorb(sample(540, percent: 90, external: true), previous: nil, day: "2026-10-29")
+        journal.absorb(sample(540 + 180, percent: 90, external: false), previous: sample(540, percent: 90, external: true), day: "2026-10-29")
+        XCTAssertTrue(journal.unplugMinutes.isEmpty, "三个小时的空档不算")
+    }
+
+    /// 重新学习：作息清掉，电量记录留着。
+    func testForgetHabitsKeepsTheRest() {
+        var journal = HabitJournal()
+        feed(&journal, [(540, 600, true), (600, 605, false)])
+        XCTAssertFalse(journal.unplugMinutes.isEmpty)
+        journal.forgetHabits()
+        XCTAssertTrue(journal.unplugMinutes.isEmpty)
+        XCTAssertNil(journal.today?.unplug)
+        XCTAssertNotNil(journal.today, "一天的汇总还在")
     }
 
     /// 换了新的一天就新开一行，旧的一天不续。
