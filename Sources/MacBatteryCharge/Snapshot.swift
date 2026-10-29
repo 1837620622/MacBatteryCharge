@@ -31,6 +31,16 @@ enum Snapshot {
             let model = sampleModel(mode: .smart, language: language)
             ok = render(RootView(model: model), size: NSSize(width: 420, height: 760), appearance: .darkAqua,
                         to: file("main-smart-dark-\(tag).png")) && ok
+            if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v3.1.1","assets":[]}"#.utf8)) {
+                let ready = sampleModel(mode: .smart, language: language)
+                ready.loadPreviewUpdate(.ready(release, URL(fileURLWithPath: "/tmp/MacBatteryCharge-3.1.1-arm64.pkg")))
+                ok = render(RootView(model: ready), size: NSSize(width: 420, height: 760), appearance: .aqua,
+                            to: file("main-update-ready-\(tag).png")) && ok
+                let failed = sampleModel(mode: .smart, language: language)
+                failed.loadPreviewUpdate(.failed(T("下载没有成功，请检查网络。"), release))
+                ok = render(RootView(model: failed), size: NSSize(width: 420, height: 760), appearance: .aqua,
+                            to: file("main-update-failed-\(tag).png")) && ok
+            }
             ok = render(SettingsView(model: model), size: NSSize(width: 460, height: 640), appearance: .aqua,
                         to: file("settings-\(tag).png")) && ok
             ok = render(GuideView(model: model), size: NSSize(width: 460, height: 430), appearance: .aqua,

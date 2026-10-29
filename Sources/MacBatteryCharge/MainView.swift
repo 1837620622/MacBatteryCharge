@@ -21,6 +21,7 @@ struct RootView: View {
                         if let error = model.scheduleError {
                             MessageLine(message: AppModel.Message(tone: .error, text: error.message)) {}
                         }
+                        UpdateBanner(model: model)
                         tonightCard
                         Picker(T("模式"), selection: modeBinding) {
                             ForEach(ChargeMode.allCases, id: \.self) { mode in
