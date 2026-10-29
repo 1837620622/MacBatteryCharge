@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 分发包：安装器里看得到欢迎页、左边的应用图标和说明。组件包只负责把 app 装进「应用程序」。 -->
+<installer-gui-script minSpecVersion="2">
+    <title>充电上限</title>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="__ARCH__"/>
+    <welcome file="Welcome.html" mime-type="text/html"/>
+    <conclusion file="Conclusion.html" mime-type="text/html"/>
+    <background file="background.png" mime-type="image/png" alignment="topleft" scaling="none"/>
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" visible="false">
+        <pkg-ref id="com.macbatterycharge.pkg"/>
+    </choice>
+    <pkg-ref id="com.macbatterycharge.pkg" version="__VERSION__" onConclusion="none">MacBatteryCharge-component.pkg</pkg-ref>
+</installer-gui-script>
