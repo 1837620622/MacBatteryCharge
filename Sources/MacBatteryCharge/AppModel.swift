@@ -814,7 +814,7 @@ final class AppModel: ObservableObject {
         case .charging: return T("充电中")
         case .discharging: return battery.externalConnected ? T("电源不够用") : T("用电池")
         case .plugged:
-            if let percent = battery.percent, percent >= decision.limit - 1 { return T("停在上限") }
+            if let percent = battery.percent, percent >= decision.limit - 1 { return T("已停住") }
             return T("电源接通")
         case .battery: return T("用电池")
         case .noBattery: return T("没有电池")
@@ -900,7 +900,7 @@ final class AppModel: ObservableObject {
         }
         let eta = now.addingTimeInterval(Double(plan.etaMinutes) * 60)
         if plan.reachesInTime {
-            return Tonight(title: title, detail: T("约 %@ 充满，离拔电源还有 %@", ["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
+            return Tonight(title: title, detail: T("约 %@ 充满，比拔电源早 %@",["\(Self.clock(eta))", "\(Self.duration(plan.minutesToDeadline - plan.etaMinutes))"]),
                            symbol: "moon.stars.fill", tone: .info)
         }
         return Tonight(title: title, detail: T("来不及充到 %@%，可以点「临时充满」", ["\(plan.target)"]), symbol: "exclamationmark.triangle.fill", tone: .error)

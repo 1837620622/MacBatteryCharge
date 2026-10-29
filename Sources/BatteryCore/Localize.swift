@@ -286,7 +286,7 @@ public enum Table {
         "帮手现在没有响应，而上次看到电源是断开的。请重启这台 Mac 之后再卸载。": "The helper is not responding, and power was last seen disconnected. Restart this Mac before uninstalling.",
         "平时停在 %@%，离电前再往上备": "Holding at %@%, topping up before you unplug",
         "平时停在日常上限（默认 80%），不会一直满电。按你平时拔电源的时间，提前把电备到离电目标。不主动放电。": "It holds at the daily cap (80% by default) instead of staying full. Around the time you usually unplug, it tops up to your unplug target. It never discharges on its own.",
-        "平时停在这里，不一直满电。电池更耐用。": "Holds here by day instead of staying full. Batteries last longer.",
+        "平时停在这里，不一直满电。电池更耐用。": "Holds at this level day to day instead of staying full. Batteries last longer.",
         "平时停在这里，不长时间满电。离电前才往上放到离电目标。": "It holds here most of the day instead of staying full, and only tops up to the unplug target before you leave.",
         "平时充到多少停、离电那刻要多少，是两个数，分别在模式里设。": "How high it charges day to day and how much you want when you unplug are two separate numbers, both set in the mode.",
         "应用程序": "Applications",
@@ -615,6 +615,8 @@ public enum Table {
         "拔电源前充满": "Fill up before you unplug",
         "到这个时间之前，按时间表提前开始补到下面的目标，好带着满电出门。": "Before this time, the schedule starts topping up to the target below, so you leave with a full battery.",
         "拔电源的时间": "Unplug time",
+        "已停住": "Holding steady",
+        "约 %@ 充满，比拔电源早 %@": "Full around %@, %@ before you unplug",
     ]
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
@@ -1153,5 +1155,7 @@ public enum Table {
         "拔电源前充满": "拔電源前充滿",
         "到这个时间之前，按时间表提前开始补到下面的目标，好带着满电出门。": "到這個時間之前，按時間表提前開始補到下面的目標，好帶著滿電出門。",
         "拔电源的时间": "拔電源的時間",
+        "已停住": "已停住",
+        "约 %@ 充满，比拔电源早 %@": "約 %@ 充滿，比拔電源早 %@",
     ]
 }

@@ -96,18 +96,16 @@ struct FixedPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if model.settings.deadlineEnabled {
-                    HStack(spacing: 12) {
-                        DatePicker(T("拔电源的时间"), selection: ClockPicker.binding($model.settings.deadline),
-                                   displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-                            .fixedSize()
-                        Picker(T("充到"), selection: $model.settings.unplugTarget) {
-                            ForEach(ChargePlanner.targetChoices, id: \.self) { value in
-                                Text("\(value)%").tag(value)
-                            }
+                    DatePicker(T("拔电源的时间"), selection: ClockPicker.binding($model.settings.deadline),
+                               displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact)
+                        .fixedSize()
+                    Picker(T("充到"), selection: $model.settings.unplugTarget) {
+                        ForEach(ChargePlanner.targetChoices, id: \.self) { value in
+                            Text("\(value)%").tag(value)
                         }
-                        .pickerStyle(.segmented)
                     }
+                    .pickerStyle(.segmented)
                 }
             }
         }
