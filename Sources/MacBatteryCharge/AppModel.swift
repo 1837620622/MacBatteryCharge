@@ -97,6 +97,8 @@ final class AppModel: ObservableObject {
     private var syncingHelper = false
     private var lastSentLimit: Int?
     private var lastHelperSend = Date.distantPast
+    /// 最近一次温度和电量都读得到的时间。读数缺一下时用它判断要不要保持放电。
+    private var lastUsableReadingAt = Date.distantPast
 
     init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
@@ -429,6 +431,13 @@ final class AppModel: ObservableObject {
         // 只有固定模式能主动放电。智能模式的承诺是「随时有电」，一边接电源一边掉电和它冲突。
         guard settings.mode.allowsDischarge else {
             if discharging { discharging = false }
+            return
+        }
+        let readingUsable = battery.percent != nil && battery.celsius != nil
+        if readingUsable { lastUsableReadingAt = Date() }
+        // 读数缺一下时，正在放电的先保持，不让适配器跟着读数来回切。
+        if ChargePolicy.keepsDischargingThroughGap(previous: discharging, readingUsable: readingUsable,
+                                                   secondsSinceUsable: Date().timeIntervalSince(lastUsableReadingAt)) {
             return
         }
         let external = battery.externalConnected || helper?.adapterEnabled == false
