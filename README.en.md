@@ -11,6 +11,37 @@ English · [繁體中文](README.zh-Hant.md) · [简体中文](README.md)
   <img src="docs/images/settings-en.png" height="460" alt="Settings window">
 </p>
 
+## Features
+
+### Protect battery health
+
+- **Holds around 80% day to day**: Smart mode's everyday limit can be 80, 85, 90 or 95, or any value you enter. A battery that isn't kept full for hours ages more slowly.
+- **Three modes**: Smart, Fixed schedule and Always full, so you can match how you use the Mac.
+- **Heat protection**: in every mode. At 35°C the limit drops to 80%, and it resumes below 33°C.
+- **Discharge helper (optional)**: when the charge is above the limit, it can discharge back down to the limit instead of only pausing charging.
+- **Health and cycles**: read from the system and explained in the main window. It warns when health falls below 80%, and when the cycle count has used up more than 80% of the design life. Health is an estimate from the system.
+
+### Have charge when you need it
+
+- **Learns when you usually unplug**: after 3 unplugs within one hour, it fills the battery to your target (80, 90 or 100, or any value you enter) before that time.
+- **Full before unplugging** (Fixed schedule): works out from this Mac's real charging speed, and lifts the limit early when there's time, so the battery is full when you unplug.
+- **Top up**: charges to 100% right away. It stops when you unplug.
+- **Weekday power cuts (dorm)**: charges to your target before the cut. During the cut it turns on Low Power Mode to save battery, and turns it off when power returns. Weekends are not affected.
+
+### Warnings and alerts
+
+- **Tips in the main window**: up to three at a time, warnings first. They cover a hot battery, a charger too weak to keep up (plugged in but still draining), slow charging, low health or most of the cycle life used, and high memory pressure (a warning while on battery).
+- **Tonight's plan**: shows when the battery should be full. If it won't make it in time, the plan says so and offers Top up.
+- **System notifications** (off by default, turn on in Settings): the limit being lifted early, overheating holding the limit at 80%, and reaching the limit.
+
+### More
+
+- **Charge curve**: the last 16 hours as a solid line, and the next 8 hours as a dashed forecast.
+- **Habits and details**: what the app has learned, the basis for it, your recent unplugs, how many more are needed, and tips.
+- **Notch island**: pops up when you plug or unplug power, and has a Top up button.
+- **Three languages**: Simplified Chinese, Traditional Chinese and English, following the system by default.
+- **Launch at login, automatic update checks, and issue reporting**: the diagnostics are already filled in, so you just open the issue on GitHub.
+
 ## Three modes
 
 Pick one at the top of the window:
