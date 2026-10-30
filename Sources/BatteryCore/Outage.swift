@@ -21,4 +21,11 @@ public enum Outage {
         if minute < to { return isWorkday(weekday: weekday == 1 ? 7 : weekday - 1) }
         return false
     }
+
+    /// 停电时低电量模式该是什么。停电中、并且用户勾了「停电时保持低电量」，就开；
+    /// 其余时候只关掉自己开过的（`wereOn`），没开过就不碰（nil），用户手动设的不动。
+    public static func lowPowerWanted(cutNow: Bool, keep: Bool, wereOn: Bool) -> Bool? {
+        if cutNow && keep { return true }
+        return wereOn ? false : nil
+    }
 }

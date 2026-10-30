@@ -61,6 +61,9 @@ struct SettingsView: View {
                             .environment(\.locale, ClockPicker.locale)
                     }
                     .disabled(!model.settings.outageEnabled)
+                    // 放在时间下面：停电时要不要省电，是这段时间里才有的选择。默认不勾，停电时照常充电。
+                    Toggle(T("停电时保持低电量"), isOn: $model.settings.outageLowPower)
+                        .disabled(!model.settings.outageEnabled)
                     if !model.helperUsable {
                         Text(T("低电量模式要放电帮手，在下面「高级」里装一次就行。"))
                             .font(.caption)
@@ -70,7 +73,7 @@ struct SettingsView: View {
                 } header: {
                     Text(T("工作日停电"))
                 } footer: {
-                    Text(T("住宿舍、周一到周五这段时间停电时用。停电前会充到你设的目标，停电时开低电量模式省电，来电后关掉。周末在家不停电，照常用主窗口里的设置。"))
+                    Text(T("住宿舍、周一到周五这段时间停电时用。停电前会充到你设的目标。勾上「停电时保持低电量」，停电时就开低电量模式省电，来电后关掉。周末在家不停电，照常用主窗口里的设置。"))
                 }
 
                 Section(T("外观")) {
