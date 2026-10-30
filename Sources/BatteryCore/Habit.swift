@@ -55,7 +55,7 @@ public enum HabitTips {
         // 学出来的拔电时间。
         if let unplug = journal.learnedUnplug() {
             tips.append(HabitTip(.unplugPattern, "clock.arrow.circlepath",
-                                 T("你平时大约 %@ 拔电源", ["\(unplug.text)"]),
+                                 T("你平时大约 %@ 拔电源", ["\(unplug.display)"]),
                                  T("到点前我会先备好电，不用你自己盯着。")))
         }
 

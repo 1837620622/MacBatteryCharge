@@ -27,6 +27,13 @@ public struct ClockTime: Hashable, Comparable, Codable, Sendable {
     public var minute: Int { minuteOfDay % 60 }
     public var text: String { String(format: "%02d:%02d", hour, minute) }
 
+    /// 给人看的时间。英文用 12 小时制（9:00 PM），和时间选择器一致；中文和繁体用 24 小时制。存文件仍用 `text`。
+    public var display: String {
+        guard Lang.resolved == .en else { return text }
+        let hour12 = hour % 12 == 0 ? 12 : hour % 12
+        return "\(hour12):\(String(format: "%02d", minute)) \(hour < 12 ? "AM" : "PM")"
+    }
+
     public func adding(minutes: Int) -> ClockTime { ClockTime(minuteOfDay: minuteOfDay + minutes) }
 
     /// 从 self 往后走到 other 要几分钟，0...1439。

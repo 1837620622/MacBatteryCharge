@@ -9,8 +9,8 @@ struct ChargeCurve: View {
     /// 从现在起的预测。第一个点就是现在的电量。
     var forecast: [ForecastPoint]
     var now: Date
-    /// 曲线的高度。一直充满的页面内容短，就画高一点，免得底下留一大片空白。
-    var height: CGFloat = 96
+    /// 页面内容放得下时为 true：曲线占满剩下的高度，最低 96。放不下时固定 96。
+    var fills = false
 
     static let pastMinutes = 16 * 60
     static let futureMinutes = 8 * 60
@@ -26,7 +26,7 @@ struct ChargeCurve: View {
             Canvas { context, size in
                 draw(in: &context, size: size)
             }
-            .frame(height: height)
+            .frame(minHeight: 96, maxHeight: fills ? .infinity : 96)
             .accessibilityElement()
             .accessibilityLabel(T("过去 16 小时的电量，和之后 8 小时的预测"))
             Text(T("实线是记下来的读数，虚线是按时间表和充电速度推算的，只是估计。"))

@@ -31,7 +31,7 @@ enum Snapshot {
             let model = sampleModel(mode: .smart, language: language)
             ok = render(RootView(model: model), size: RootView.popoverSize, appearance: .darkAqua,
                         to: file("main-smart-dark-\(tag).png")) && ok
-            if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v3.2.1","assets":[]}"#.utf8)) {
+            if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v9.0.0","assets":[]}"#.utf8)) {
                 let ready = sampleModel(mode: .smart, language: language)
                 ready.loadPreviewUpdate(.available(release))
                 ok = render(RootView(model: ready), size: RootView.popoverSize, appearance: .aqua,

@@ -23,8 +23,11 @@ struct RootView: View {
         ZStack {
             WindowBackdrop(look: model.settings.look, transparency: model.settings.transparency)
             if model.showGuide {
-                ScrollView {
+                // 引导的内容短，上下居中，不留一大片空白。
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
                     GuideView(model: model)
+                    Spacer(minLength: 0)
                 }
             } else if page == .settings {
                 SettingsView(model: model) { switchPage(.main) }
@@ -38,41 +41,52 @@ struct RootView: View {
 
     /// 主页和设置之间淡入淡出，不硬切。
     private func switchPage(_ next: Page) {
-        withAnimation(.easeInOut(duration: 0.2)) { page = next }
+        withAnimation(Motion.quick) { page = next }
     }
 
     private var mainPage: some View {
         VStack(spacing: 0) {
             header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if let message = model.message {
-                        MessageLine(message: message) { model.dismissMessage() }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    // 时间表有错要改好才会消失，所以这一行没有「关掉」。
-                    if let error = model.scheduleError {
-                        MessageLine(message: AppModel.Message(tone: .error, text: error.message))
-                    }
-                    UpdateBanner(model: model)
-                    tonightCard
-                    curve
-                    ChoiceBar(options: ChargeMode.allCases, title: { $0.title }, selection: modeBinding)
-                    Text(model.settings.mode.tagline)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    modePanel
-                    // 一直充满本来就是 100%，临时充满没有用，也就不放这一行。
-                    if model.settings.mode != .full {
-                        footer
-                    }
+            // 内容放得下就不滚动，曲线占满剩下的高度；放不下才滚动，曲线保持原来的高度。
+            ViewThatFits(in: .vertical) {
+                pageBody(fillsHeight: true)
+                ScrollView {
+                    pageBody(fillsHeight: false)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 18)
-                .animation(.easeInOut(duration: 0.25), value: model.message)
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
+            .frame(maxHeight: .infinity)
         }
+    }
+
+    private func pageBody(fillsHeight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let message = model.message {
+                MessageLine(message: message) { model.dismissMessage() }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            // 时间表有错要改好才会消失，所以这一行没有「关掉」。
+            if let error = model.scheduleError {
+                MessageLine(message: AppModel.Message(tone: .error, text: error.message))
+            }
+            UpdateBanner(model: model)
+            tonightCard
+            curve(fillsHeight: fillsHeight)
+            ChoiceBar(options: ChargeMode.allCases, title: { $0.title }, selection: modeBinding)
+            Text(model.settings.mode.tagline)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            modePanel
+            // 一直充满本来就是 100%，临时充满没有用，也就不放这一行。
+            if model.settings.mode != .full {
+                footer
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
+        .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
+        .animation(Motion.standard, value: model.message)
+        .animation(Motion.standard, value: model.tonight)
     }
 
     private var header: some View {
@@ -87,6 +101,7 @@ struct RootView: View {
                 Text(percentText)
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .numericTextTransition()
                     .shadow(color: .black.opacity(0.25), radius: 2)
             }
             .accessibilityElement(children: .ignore)
@@ -94,6 +109,7 @@ struct RootView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.statusTitle)
                     .font(.title3.weight(.semibold))
+                    .contentTransition(.opacity)
                 Text(model.statusDetail)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -121,12 +137,10 @@ struct RootView: View {
 
     /// 今晚的计划放在最上面：这是人最想知道的一句话，不用在别处找。
     /// 电量曲线：过去 16 小时和之后 8 小时的预测。还没有读数时不占地方。
-    @ViewBuilder private var curve: some View {
+    @ViewBuilder private func curve(fillsHeight: Bool) -> some View {
         let samples = model.history.samples(since: Date().addingTimeInterval(-TimeInterval(ChargeCurve.pastMinutes * 60)))
         if !samples.isEmpty {
-            // 一直充满的页面内容最短，曲线画高到正好填满底下的空白。
-            ChargeCurve(samples: samples, forecast: model.forecast, now: Date(),
-                        height: model.settings.mode == .full ? 190 : 96)
+            ChargeCurve(samples: samples, forecast: model.forecast, now: Date(), fills: fillsHeight)
         }
     }
 
@@ -150,6 +164,7 @@ struct RootView: View {
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.1)))
             .accessibilityElement(children: .combine)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -201,7 +216,7 @@ struct RootView: View {
 
     private var modeBinding: Binding<ChargeMode> {
         Binding(get: { model.settings.mode }, set: { mode in
-            withAnimation(.easeInOut(duration: 0.25)) { model.settings.mode = mode }
+            withAnimation(Motion.standard) { model.settings.mode = mode }
         })
     }
 

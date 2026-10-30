@@ -51,6 +51,7 @@ struct GuideView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Text(T("你平时大约几点拔电源？"))
+                    .fixedSize(horizontal: false, vertical: true)
                 DatePicker("", selection: ClockPicker.binding($model.settings.deadline),
                            displayedComponents: .hourAndMinute)
                     .labelsHidden()
