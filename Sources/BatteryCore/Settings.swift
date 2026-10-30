@@ -57,6 +57,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var skippedVersion: String?
     /// 今天不放电的那一天（yyyy-MM-dd）。只管当天，过了午夜自动失效。
     public var dischargeOffDay: String?
+    /// 工作日停电（住宿舍）：周一到周五的这段时间没有电源。停电前充到目标，停电时开低电量，来电后关。周末不管。
+    public var outageEnabled = false
+    public var outageStart = ClockTime(hour: 23, minute: 30)
+    public var outageEnd = ClockTime(hour: 6, minute: 0)
 
     public init(intervals: [Interval] = Schedule.makeDefaults()) {
         self.intervals = intervals
@@ -67,7 +71,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case intervals, launchAtLogin, guideSeen, autoCheckUpdates, deadlineEnabled, deadline, unplugTarget
         case notifications, lastUpdateCheck, skippedVersion, language
         case notchIsland, notchOnPower, notchEars, notchWithoutNotch
-        case look, transparency, dischargeOffDay
+        case look, transparency, dischargeOffDay, outageEnabled, outageStart, outageEnd
     }
 
     /// 只读 discharge 这一项。旧版本的 lowPower、drift 忽略；旧版本没有放电这一项时，按关处理。
@@ -115,6 +119,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         lastUpdateCheck = (try? c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)) ?? nil
         skippedVersion = (try? c.decodeIfPresent(String.self, forKey: .skippedVersion)) ?? nil
         dischargeOffDay = (try? c.decodeIfPresent(String.self, forKey: .dischargeOffDay)) ?? nil
+        outageEnabled = read(.outageEnabled, false)
+        outageStart = read(.outageStart, ClockTime(hour: 23, minute: 30))
+        outageEnd = read(.outageEnd, ClockTime(hour: 6, minute: 0))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -140,6 +147,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try c.encodeIfPresent(lastUpdateCheck, forKey: .lastUpdateCheck)
         try c.encodeIfPresent(skippedVersion, forKey: .skippedVersion)
         try c.encodeIfPresent(dischargeOffDay, forKey: .dischargeOffDay)
+        try c.encode(outageEnabled, forKey: .outageEnabled)
+        try c.encode(outageStart, forKey: .outageStart)
+        try c.encode(outageEnd, forKey: .outageEnd)
     }
 
     public static var directory: URL {

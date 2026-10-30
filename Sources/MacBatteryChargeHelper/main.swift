@@ -108,6 +108,9 @@ var limit: Int?
 var dischargeTo: Int?
 var resumeAt: Int?
 var leaseUntil = Date.distantPast
+/// 低电量模式：帮手开过才记为「自己开的」，租期到了只关自己开的；用户手动设的不动。
+var lowPowerOwned = false
+var lowPowerLeaseUntil = Date.distantPast
 var lastApply = Date()
 var sleeping = false
 var chargingAllowed = true
@@ -155,7 +158,31 @@ func setCeiling(_ percent: Int) {
     }
 }
 
+/// 用 pmset 开关低电量模式。
+func setLowPower(_ on: Bool) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+    process.arguments = ["-a", "lowpowermode", on ? "1" : "0"]
+    do {
+        try process.run()
+        process.waitUntilExit()
+    } catch {
+        lastError = "pmset 启动失败"
+        return
+    }
+    guard process.terminationStatus == 0 else {
+        lastError = "pmset 没有成功"
+        return
+    }
+    lowPowerOwned = on
+    say("低电量模式 \(on ? "开" : "关")")
+}
+
 func evaluate() {
+    // 低电量：帮手开的，没人续期就关，免得一直停在低电量模式。
+    if lowPowerOwned, Date() >= lowPowerLeaseUntil {
+        setLowPower(false)
+    }
     let battery = readBattery()
     // 上限 24 小时没有人续期（程序不再开），就放掉，免得电池一直被限在低处。
     if limit != nil, Date().timeIntervalSince(lastApply) > HelperInfo.limitLifetime {
@@ -179,6 +206,8 @@ func evaluate() {
 }
 
 func resetAll() {
+    if lowPowerOwned { setLowPower(false) }
+    lowPowerLeaseUntil = .distantPast
     limit = nil
     dischargeTo = nil
     resumeAt = nil
@@ -220,6 +249,16 @@ func handle(_ request: HelperRequest) -> HelperStatus {
             dischargeTo = nil
             resumeAt = nil
             leaseUntil = .distantPast
+        }
+        if let lowPower = request.lowPower {
+            if lowPower {
+                // 续期：每次请求都顺延，程序不再来，过了租期就关。已经开着就不重复调用 pmset。
+                lowPowerLeaseUntil = Date().addingTimeInterval(Double(HelperInfo.lowPowerLease))
+                if !lowPowerOwned { setLowPower(true) }
+            } else {
+                lowPowerLeaseUntil = .distantPast
+                setLowPower(false)
+            }
         }
         evaluate()
     }

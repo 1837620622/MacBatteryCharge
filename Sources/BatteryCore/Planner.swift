@@ -91,6 +91,12 @@ public enum ChargePolicy {
         return previous ? percent > window.resume : percent >= window.start
     }
 
+    /// 读数偶尔缺一下（温度或电量读不到）时，已经在放电的先保持一小会儿。不然放电和接电会跟着读数来回切，对电源适配器不好。
+    public static let gapHoldSeconds: Double = 60
+    public static func keepsDischargingThroughGap(previous: Bool, readingUsable: Bool, secondsSinceUsable: Double) -> Bool {
+        previous && !readingUsable && secondsSinceUsable < gapHoldSeconds
+    }
+
     /// 超过 35°C 开始保护，降到 33°C 以下才解除，中间保持上一次的状态，免得来回跳。
     public static func heatActive(previous: Bool, celsius: Double?, external: Bool) -> Bool {
         guard external, let celsius else { return false }
@@ -136,7 +142,7 @@ public enum ChargePlanner {
                             target targetValue: Int, rate learnedRate: Double?, margin: Int = 15,
                             window: Int = 480) -> ChargePlan? {
         let toDeadline = ClockTime(minuteOfDay: minute).minutes(until: deadline)
-        guard toDeadline > 0, toDeadline <= window else { return nil }
+        guard toDeadline >= 0, toDeadline <= window else { return nil }
         let target = clampTarget(targetValue)
         let rate = max(0.05, min(3, learnedRate ?? defaultRate))
         let need = max(0, target - percent)
@@ -153,7 +159,7 @@ public enum ChargePlanner {
         }
         // 时间表在断电前什么时候放开到 target。
         var scheduledLift = toDeadline
-        for ahead in 1..<toDeadline where schedule.limit(at: minute + ahead) >= target {
+        for ahead in stride(from: 1, to: toDeadline, by: 1) where schedule.limit(at: minute + ahead) >= target {
             scheduledLift = ahead
             break
         }
@@ -168,7 +174,7 @@ public enum ChargePlanner {
                             base: Int, rate learnedRate: Double?, margin: Int = 15,
                             window: Int = 480) -> ChargePlan? {
         let toDeadline = ClockTime(minuteOfDay: minute).minutes(until: deadline)
-        guard toDeadline > 0, toDeadline <= window else { return nil }
+        guard toDeadline >= 0, toDeadline <= window else { return nil }
         let target = clampTarget(targetValue)
         let rate = max(0.05, min(3, learnedRate ?? defaultRate))
         let need = max(0, target - percent)

@@ -39,6 +39,31 @@ struct SettingsView: View {
                     Toggle(T("备电和过热时通知我"), isOn: $model.settings.notifications)
                 }
 
+                Section {
+                    Toggle(T("周一到周五停电"), isOn: $model.settings.outageEnabled)
+                    if model.settings.outageEnabled {
+                        DatePicker(T("停电的时间"), selection: ClockPicker.binding($model.settings.outageStart),
+                                   displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+                            .fixedSize()
+                            .environment(\.locale, ClockPicker.locale)
+                        DatePicker(T("来电的时间"), selection: ClockPicker.binding($model.settings.outageEnd),
+                                   displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+                            .fixedSize()
+                            .environment(\.locale, ClockPicker.locale)
+                        if !model.helperUsable {
+                            Text(T("低电量模式要放电帮手，在下面「高级」里装一次就行。"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text(T("工作日停电"))
+                } footer: {
+                    Text(T("住宿舍、周一到周五这段时间停电时用。停电前会充到你设的目标，停电时开低电量模式省电，来电后关掉。周末在家不停电，照常用主窗口里的设置。"))
+                }
+
                 Section(T("外观")) {
                     Picker(T("质感"), selection: $model.settings.look) {
                         ForEach(WindowLook.allCases, id: \.self) { value in
@@ -108,20 +133,20 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(T("放电帮手"))
             if model.helperUsable {
-                Text(T("已经装好。只有固定模式里打开「放电」的时间段会用到它。"))
+                Text(T("已经装好。它负责固定时间表里的放电，也负责停电时的低电量模式。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(T("卸载放电帮手")) { model.removeHelper() }
                     .disabled(model.helperBusy)
             } else {
-                Text(T("只有固定模式里打开「放电」的时间段才需要它。安装时系统会问一次管理员密码，密码不经过本软件。"))
+                Text(T("放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(T("安装放电帮手")) { model.installHelper() }
                     .disabled(model.helperBusy)
             }
             if model.helperOutdated {
-                Text(T("放电帮手是旧版本，重新安装一次。"))
+                Text(T("放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。"))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }

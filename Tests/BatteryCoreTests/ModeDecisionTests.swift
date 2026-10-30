@@ -100,6 +100,31 @@ final class ModeDecisionTests: XCTestCase {
     // MARK: 旧文件
 
     /// 没有 mode 这一项的老文件，行为就是按时间表，所以升级后是固定模式，不是智能。
+    /// 离电那一分钟（剩 0 分钟）还要把离电目标留住，不能在最后一分钟掉回日常上限。
+    func testSmartPlanStillLiftsAtTheDeadlineMinute() throws {
+        let plan = try XCTUnwrap(ChargePlanner.plan(minute: at(22, 0), percent: 60, deadline: ClockTime(hour: 22, minute: 0),
+                                                    target: 100, base: 80, rate: nil))
+        XCTAssertEqual(plan.minutesToDeadline, 0)
+        XCTAssertTrue(plan.liftNow)
+    }
+
+    /// 时间表版本在离电那一分钟也不能崩（循环范围是 1..<0 时会越界）。
+    func testSchedulePlanAtTheDeadlineMinuteDoesNotTrap() {
+        let flat = SmartPolicy.flatSchedule(cap: 80)
+        let plan = ChargePlanner.plan(schedule: flat, minute: at(22, 0), percent: 60, deadline: ClockTime(hour: 22, minute: 0),
+                                      target: 100, rate: nil)
+        XCTAssertNotNil(plan)
+        XCTAssertEqual(plan?.minutesToDeadline, 0)
+    }
+
+    /// 读数缺一下：只有「正在放电」且缺得不久，才保持放电；开始放电必须读数完整。
+    func testDischargeHoldsThroughAShortReadingGap() {
+        XCTAssertTrue(ChargePolicy.keepsDischargingThroughGap(previous: true, readingUsable: false, secondsSinceUsable: 10))
+        XCTAssertFalse(ChargePolicy.keepsDischargingThroughGap(previous: true, readingUsable: false, secondsSinceUsable: 90))
+        XCTAssertFalse(ChargePolicy.keepsDischargingThroughGap(previous: false, readingUsable: false, secondsSinceUsable: 10))
+        XCTAssertFalse(ChargePolicy.keepsDischargingThroughGap(previous: true, readingUsable: true, secondsSinceUsable: 0))
+    }
+
     /// 预测用的「整天停在上限」时间表：不能有空档（空档是 100%），每一分钟都是这个上限。
     func testSmartForecastScheduleHoldsTheCapAllDay() {
         let flat = SmartPolicy.flatSchedule(cap: 85)

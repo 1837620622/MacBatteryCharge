@@ -32,7 +32,7 @@ All three modes have heat protection: when the battery reaches 35°C the limit d
 ## Interface
 
 - **Main window:** battery level, what it's doing now, tonight's plan, the charge curve (the last 16 hours as a solid line, and the next 8 hours as a dashed forecast), the three modes, and top-up.
-- **Settings** (gear icon, top right): language (Simplified Chinese, Traditional Chinese, English, default follows the system), launch at login, notifications, appearance, Notch island, Advanced (discharge helper, no discharging today), and About.
+- **Settings** (gear icon, top right): language (Simplified Chinese, Traditional Chinese, English, default follows the system), launch at login, notifications, weekday power cuts (dorm), appearance, Notch island, Advanced (discharge helper, no discharging today), and About.
 - **Notch island** (Macs with a notch): click the notch to expand, click again to collapse. It pops up by itself when you plug or unplug power, and closes after a few seconds. On Macs without a notch, turn on "Also use it without a notch" in Settings to show it in the middle of the menu bar.
 
 <p align="center">
@@ -79,6 +79,16 @@ macOS's own charge limit only stops charging. It won't discharge while plugged i
 - During sleep it doesn't discharge, and it reconnects power. If the app quits, or it hasn't heard from the app for two minutes, it reconnects power by itself.
 - To remove it: Settings → Advanced → "Remove the discharge helper". It reconnects power before removing anything.
 
+## Weekday power cuts and Low Power Mode (needs the discharge helper)
+
+If you lose power on weekday nights, for example in a dorm, turn on "Weekday power cuts" in Settings and set the times. The default is 23:30 to 06:00.
+
+- It only applies Monday to Friday. On weekends you have power all day, and the settings above apply as usual.
+- Before the cut, the app charges to your target (100% by default), so the battery is full when the power goes out.
+- During the cut, the app turns on macOS Low Power Mode to save battery. When power returns, it turns Low Power Mode off right away, so charging during the day doesn't slow you down.
+- It only turns off what it turned on itself; anything you set by hand stays.
+- Low Power Mode uses the same discharge helper, so you only install it once.
+
 ## Honest limits
 
 - Keeping the battery ready before you unplug is not a guarantee. If you unplug earlier than usual, or charging is slower (a power bank, for example), you may not reach the target in time. When the Mac is too hot, the limit stays at 80%, so it may not fill up either.
@@ -101,7 +111,7 @@ Design docs (in Chinese): [设计要求](docs/设计要求.md), [设计核对](d
 Charge Limit is free and open source. Every feature is free, and it will stay free for individuals.
 
 - **Individuals:** if it keeps you charged when you need it, you're welcome to sponsor it. Any amount is fine, and it unlocks nothing.
-- **Companies:** sponsorship, custom work, and support can be arranged separately. See [enterprise cooperation](docs/企业合作.md) (in Chinese).
+- **Companies:** sponsorship, custom work, and support can be arranged separately. See [enterprise cooperation](docs/企业合作.en.md).
 
 Payment options aren't set up yet. To sponsor or discuss a partnership, open an issue at [Issues](https://github.com/1837620622/MacFullBar/issues/new/choose) with the title "Sponsorship" or "Enterprise cooperation", and the author will reply.
 

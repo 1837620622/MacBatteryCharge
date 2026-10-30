@@ -34,6 +34,21 @@ final class AppearanceTests: XCTestCase {
         XCTAssertEqual(WindowLook.allCases.map(\.title), ["纯色", "磨砂", "玻璃"])
     }
 
+    /// 赞助和企业合作的链接跟着界面语言走，每种语言打开的都是对应的文档。
+    func testSponsorAndEnterpriseLinksFollowTheLanguage() {
+        let saved = Lang.current
+        defer { Lang.current = saved }
+        Lang.current = .en
+        XCTAssertEqual(AppInfo.sponsorPage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/README.en.md#sponsorship")
+        XCTAssertEqual(AppInfo.enterprisePage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/docs/%E4%BC%81%E4%B8%9A%E5%90%88%E4%BD%9C.en.md")
+        Lang.current = .zhHant
+        XCTAssertEqual(AppInfo.sponsorPage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/README.zh-Hant.md#%E8%B4%8A%E5%8A%A9")
+        XCTAssertEqual(AppInfo.enterprisePage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/docs/%E4%BC%81%E6%A5%AD%E5%90%88%E4%BD%9C.zh-Hant.md")
+        Lang.current = .zh
+        XCTAssertEqual(AppInfo.sponsorPage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/README.md#%E8%B5%9E%E5%8A%A9")
+        XCTAssertEqual(AppInfo.enterprisePage.absoluteString, "https://github.com/1837620622/MacFullBar/blob/main/docs/%E4%BC%81%E4%B8%9A%E5%90%88%E4%BD%9C.md")
+    }
+
     func testAuthor() {
         XCTAssertEqual(AppInfo.author, "传康Kk")
         XCTAssertEqual(AppInfo.authorPage.absoluteString, "https://github.com/1837620622")

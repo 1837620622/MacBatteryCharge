@@ -9,9 +9,12 @@ public enum HelperInfo {
     public static let installedBinary = "/Library/PrivilegedHelperTools/com.macbatterycharge.helper"
     public static let launchDaemonPlist = "/Library/LaunchDaemons/com.macbatterycharge.helper.plist"
     /// 帮手协议版本。和程序不一致时要重新装帮手。
-    public static let protocolVersion = 1
+    /// 2：新增低电量模式。旧版本的帮手会被提示重新安装。
+    public static let protocolVersion = 2
     /// 程序隔一会儿就续一次。帮手超过这个时间没收到，就自己接回电源，程序崩了也不会一直放下去。
     public static let maxLease = 300
+    /// 低电量模式没人续期多久就关（程序每分钟左右续一次）。
+    public static let lowPowerLease = 180
     /// 帮手自己设的上限（旧系统、Intel）超过这么久没有人续期，就放掉，恢复原样。
     public static let limitLifetime: TimeInterval = 24 * 3600
 }
@@ -33,13 +36,16 @@ public struct HelperRequest: Codable, Equatable, Sendable {
     public var resumeAt: Int?
     /// 放电指令有效几秒。
     public var lease: Int?
+    /// 低电量模式：true 开，false 关，nil 不管。帮手开过的，没人续期就自己关。
+    public var lowPower: Bool?
 
-    public init(cmd: Command, limit: Int? = nil, dischargeTo: Int? = nil, resumeAt: Int? = nil, lease: Int? = nil) {
+    public init(cmd: Command, limit: Int? = nil, dischargeTo: Int? = nil, resumeAt: Int? = nil, lease: Int? = nil, lowPower: Bool? = nil) {
         self.cmd = cmd
         self.limit = limit
         self.dischargeTo = dischargeTo
         self.resumeAt = resumeAt
         self.lease = lease
+        self.lowPower = lowPower
     }
 }
 
