@@ -61,16 +61,21 @@ struct RootView: View {
 
     private func pageBody(fillsHeight: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let message = model.message {
-                MessageLine(message: message) { model.dismissMessage() }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            // 动画只跟着这一条提示走。放在整页上，别的结构变化（比如时间选择器）也会跟着动。
+            Group {
+                if let message = model.message {
+                    MessageLine(message: message) { model.dismissMessage() }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(Motion.standard, value: model.message)
             // 时间表有错要改好才会消失，所以这一行没有「关掉」。
             if let error = model.scheduleError {
                 MessageLine(message: AppModel.Message(tone: .error, text: error.message))
             }
             UpdateBanner(model: model)
             tonightCard
+                .animation(Motion.standard, value: model.tonight)
             curve(fillsHeight: fillsHeight)
             ChoiceBar(options: ChargeMode.allCases, title: { $0.title }, selection: modeBinding)
             Text(model.settings.mode.tagline)
@@ -85,8 +90,6 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 18)
         .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
-        .animation(Motion.standard, value: model.message)
-        .animation(Motion.standard, value: model.tonight)
     }
 
     private var header: some View {

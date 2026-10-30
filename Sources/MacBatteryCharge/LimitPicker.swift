@@ -20,6 +20,7 @@ struct LimitPicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ChoiceBar(options: presets.map(Choice.preset) + [.custom], title: { $0.title }, selection: selection)
+            // 输入框是系统控件。选「自定义」时它跟着选中的动画走出来，会花，所以出现和消失都不做过渡。
             if customMode {
                 HStack(spacing: 8) {
                     TextField("", value: clamped, format: .number)
@@ -34,6 +35,7 @@ struct LimitPicker: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .transition(.identity)
             }
         }
     }

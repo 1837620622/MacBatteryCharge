@@ -41,22 +41,24 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(T("周一到周五停电"), isOn: $model.settings.outageEnabled)
-                    if model.settings.outageEnabled {
-                        DatePicker(T("停电的时间"), selection: ClockPicker.binding($model.settings.outageStart),
-                                   displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-                            .fixedSize()
-                            .environment(\.locale, ClockPicker.locale)
-                        DatePicker(T("来电的时间"), selection: ClockPicker.binding($model.settings.outageEnd),
-                                   displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-                            .fixedSize()
-                            .environment(\.locale, ClockPicker.locale)
-                        if !model.helperUsable {
-                            Text(T("低电量模式要放电帮手，在下面「高级」里装一次就行。"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    // 时间行一直都在，关掉只是变灰。删掉再加回来，系统的时间选择器会跟着列表动画走，画面就花了。
+                    DatePicker(T("停电的时间"), selection: ClockPicker.binding($model.settings.outageStart),
+                               displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact)
+                        .fixedSize()
+                        .environment(\.locale, ClockPicker.locale)
+                        .disabled(!model.settings.outageEnabled)
+                    DatePicker(T("来电的时间"), selection: ClockPicker.binding($model.settings.outageEnd),
+                               displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact)
+                        .fixedSize()
+                        .environment(\.locale, ClockPicker.locale)
+                        .disabled(!model.settings.outageEnabled)
+                    if !model.helperUsable {
+                        Text(T("低电量模式要放电帮手，在下面「高级」里装一次就行。"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .disabled(!model.settings.outageEnabled)
                     }
                 } header: {
                     Text(T("工作日停电"))
@@ -125,6 +127,8 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            // 行的出现和消失不做动画：里面的系统控件（时间、分段、滑块）跟着列表动画走会花。
+            .transaction { $0.animation = nil }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
