@@ -105,6 +105,20 @@ enum ChargeBridge {
             return error as String? ?? T("设置充电上限失败")
         }
     }
+
+    private static var cachedChoices: [Int]?
+
+    /// 系统接受的充电上限档位，从小到大（通常是 80、85、90、95、100）。读不到就是空的，并且下次再读。
+    static func availableLimits() -> [Int] {
+        queue.sync {
+            if let cachedChoices { return cachedChoices }
+            var error: NSString?
+            guard MBCChargeSupported(&error), let numbers = MBCChargeAvailableLimits(&error) else { return [] }
+            let choices = numbers.map(\.intValue).sorted()
+            cachedChoices = choices.isEmpty ? nil : choices
+            return choices
+        }
+    }
 }
 
 struct SystemReading: Sendable {

@@ -101,6 +101,9 @@ final class AppModel: ObservableObject {
     private var lastUsableReadingAt = Date.distantPast
     /// 低电量模式：上一次发给帮手的值（nil 表示没管过）。
     private var lastSentLowPower: Bool?
+    /// 系统接受的充电上限档位（启动时读一次，通常是 80、85、90、95、100）。没读好之前不写上限。
+    private var nativeChoices: [Int] = []
+    private var nativeChoicesLoaded = false
 
     init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
@@ -139,12 +142,12 @@ final class AppModel: ObservableObject {
     /// 系统上限和这一段的计划不一致。分两种：正在改（短暂），和改失败（要提示）。
     var systemLimitMismatch: Bool {
         guard let value = reading?.chargeLimit.value else { return false }
-        return value != decision.limit
+        return value != nativeTarget
     }
 
     /// 上一次写上限失败了，而且还没有到可以重试的时候。
     var limitWriteFailed: Bool {
-        guard let failed = failedWrite, failed.limit == decision.limit else { return false }
+        guard let failed = failedWrite, failed.limit == nativeTarget else { return false }
         return Date().timeIntervalSince(failed.at) < 300
     }
 
@@ -204,7 +207,13 @@ final class AppModel: ObservableObject {
 
     func start() {
         guard !preview, timer == nil else { return }
-        refresh()
+        // 系统接受哪几档上限要先读出来，否则第一次写上限时会拿自定义的数去撞系统。读好了再刷新。
+        Task { [weak self] in
+            let choices = await Task.detached { ChargeBridge.availableLimits() }.value
+            self?.nativeChoices = choices
+            self?.nativeChoicesLoaded = true
+            self?.refresh()
+        }
         timer = makeTimer()
         updateTimer = makeUpdateTimer()
     }
@@ -377,9 +386,9 @@ final class AppModel: ObservableObject {
     /// 换段、临时充满、提前放开、过热保护都在这里写给系统。不要密码。
     /// 系统设置里被改过也会改回时间表的值。
     private func autoApplyLimit() {
-        guard !preview, let current = reading?.chargeLimit.value, current != decision.limit else { return }
+        guard !preview, nativeChoicesLoaded, let current = reading?.chargeLimit.value, current != nativeTarget else { return }
         if writingLimit, Date().timeIntervalSince(writingSince) < 30 { return }
-        let limit = decision.limit
+        let limit = nativeTarget
         if let failed = failedWrite, failed.limit == limit, Date().timeIntervalSince(failed.at) < 300 { return }
         writingLimit = true
         writingSince = Date()
@@ -413,13 +422,41 @@ final class AppModel: ObservableObject {
         settings.mode.allowsDischarge && battery.present && schedule.discharge(at: minute) && !helperUsable
     }
 
-    /// 系统没有原生充电上限时（旧系统、Intel），上限交给帮手：直接停充，或者写 Intel 的 BCLM。
+    /// 上限交给帮手：它能停充（直接停，或者 Intel 的 BCLM），并且要的值系统没有这一档。
+    /// 系统没有原生上限（旧系统、Intel）时，档位是空的，所以也是帮手来管。
+    /// 旧版本的帮手照样能停充（充电上限不是新规则），所以版本不对也不能让上限失效。
     private var helperHandlesLimit: Bool {
-        // 旧版本的帮手照样能停充（充电上限不是新规则），所以版本不对也不能让上限失效。
         guard let helper else { return false }
         guard helper.chargeControl == .direct || helper.chargeControl == .intelCeiling else { return false }
-        return reading?.chargeLimit.isSupported != true
+        return !nativeChoices.contains(decision.limit)
     }
+
+    /// 写给系统的上限。帮手来精确停的时候，系统这边放到 100，免得系统先停下来；否则是离它最近的一档。
+    var nativeTarget: Int {
+        if helperHandlesLimit { return 100 }
+        return LimitRounding.nearestAccepted(decision.limit, choices: nativeChoices)
+    }
+
+    /// 你填的自定义数，系统只能按最近的一档停，而且没有帮手来精确停：就说清楚。没有就是 nil。
+    /// 装着的帮手如果是新固件（系统自己管上限），再装也没用，就不提装帮手。
+    var customLimitNote: String? {
+        guard !preview, !nativeChoices.isEmpty else { return nil }
+        if let helper, !helperOutdated, helper.chargeControl == .direct || helper.chargeControl == .intelCeiling { return nil }
+        let custom = [settings.smartDailyCap, settings.unplugTarget].filter { !nativeChoices.contains($0) }
+        guard let value = custom.first else { return nil }
+        let steps = nativeChoices.map { "\($0)%" }.joined(separator: "、")
+        let arguments = ["\(steps)", "\(value)%"]
+        guard helper == nil || helperOutdated else {
+            return T("这台 Mac 的系统只能停在 %@。你填的 %@ 会按最近的一档停。", arguments)
+        }
+        return T("这台 Mac 的系统只能停在 %@。你填的 %@ 会按最近的一档停。要精确停在它，需要放电帮手（在「设置 → 高级」里装一次）。",
+                 arguments)
+    }
+
+    /// 习惯和细节要的几样：学习进度、最近几次拔电源、够用的天数。
+    var learnProgress: LearnProgress { journal.learnProgress() }
+    var recentUnplugs: [UnplugEvent] { journal.recentUnplugs(5) }
+    var usableDays: Int { HabitTips.usableDays(journal: journal) }
 
     /// 这一台的充电上限现在谁都管不了：系统那边没有接口，帮手也说自己不碰。
     /// 这时候不能装作在护电池，界面要直说。

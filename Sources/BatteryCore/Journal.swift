@@ -42,6 +42,33 @@ public struct DayRecord: Codable, Equatable, Sendable {
     public var powerHours: Double { Double(powerMinutes) / 60 }
 }
 
+/// 一次拔电源：哪一天、当天的第几分钟。
+public struct UnplugEvent: Equatable, Sendable {
+    /// yyyy-MM-dd，本机时区。
+    public var day: String
+    public var minute: Int
+
+    public init(day: String, minute: Int) {
+        self.day = day
+        self.minute = minute
+    }
+}
+
+/// 学习进度。`recorded` 是一共记下几次，`bestCluster` 是一小时之内最多的那一群。
+public struct LearnProgress: Equatable, Sendable {
+    public var recorded: Int
+    public var bestCluster: Int
+
+    public init(recorded: Int, bestCluster: Int) {
+        self.recorded = recorded
+        self.bestCluster = bestCluster
+    }
+
+    /// 学会要的次数。
+    public var needed: Int { HabitJournal.minLearnCount }
+    public var learned: Bool { bestCluster >= needed }
+}
+
 /// 长期记录。比 `ChargeHistory`（只留 72 小时）长得多，是「习惯」的来源。
 ///
 /// 每个读数进来时调一次 `absorb`，一天一行累加。文件写 `journal.json`，
@@ -149,30 +176,47 @@ public struct HabitJournal: Codable, Equatable, Sendable {
         return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
 
-    /// 从长期记录里学「平时几点拔电源」。和 `ChargeHistory.learnedUnplug` 同一套投票，
-    /// 但用的是几个月的记录，不是 72 小时。至少要有 `minSamples` 次，否则不猜。
+    /// 从长期记录里学「平时几点拔电源」。一小时之内记下 `minSamples` 次以上，才算学会，取这一群的中间那次。
+    /// 用的是几个月的记录，不是 72 小时。少于这个次数就不猜。
     public func learnedUnplug(minSamples: Int = HabitJournal.minLearnCount) -> ClockTime? {
-        Self.vote(unplugMinutes, minSamples: minSamples)
+        Self.cluster(unplugMinutes, minSamples: minSamples)
     }
 
     public func learnedPlug(minSamples: Int = 3) -> ClockTime? {
-        Self.vote(plugMinutes, minSamples: minSamples)
+        Self.cluster(plugMinutes, minSamples: minSamples)
     }
 
-    /// 按 30 分钟一档投票，取票数最多那一档里出现最多的时刻。并列时取最早的。
-    static func vote(_ values: [Int], minSamples: Int) -> ClockTime? {
-        guard values.count >= minSamples else { return nil }
-        var buckets: [Int: [Int]] = [:]
-        for value in values { buckets[value / 30, default: []].append(value) }
-        // 票数一样多时取较早的一档。字典的遍历顺序每次启动都不一样，不能直接取「第一个」。
-        guard let best = buckets.max(by: { a, b in a.value.count == b.value.count ? a.key > b.key : a.value.count < b.value.count }),
-              best.value.count >= minSamples else {
-            return nil
+    /// 学习进度：一共记下几次，其中同一小时之内最多有几次。界面用它说「还差几次」。
+    public func learnProgress() -> LearnProgress {
+        LearnProgress(recorded: unplugMinutes.count, bestCluster: Self.bestGroup(unplugMinutes).count)
+    }
+
+    /// 最近几次拔电源，从新到旧。每一条带着日期和当天的时刻，给「最近记录」那一行用。
+    public func recentUnplugs(_ count: Int = 5) -> [UnplugEvent] {
+        let events = days.reversed().compactMap { record in
+            record.unplug.map { UnplugEvent(day: record.day, minute: $0) }
         }
-        var counts: [Int: Int] = [:]
-        for value in best.value { counts[value, default: 0] += 1 }
-        let top = counts.max { a, b in a.value == b.value ? a.key > b.key : a.value < b.value }
-        return top.map { ClockTime(minuteOfDay: $0.key) }
+        return Array(events.prefix(count))
+    }
+
+    /// 0 点到 4 点的记作第二天，免得 23 点半和 0 点 10 分被分成两群。
+    private static let lateNight = 240
+
+    /// 找出一小时之内人数最多的一群，返回它的时刻（0 点到 4 点的已经挪到了后面）。人数一样多时取较早的。
+    static func bestGroup(_ values: [Int]) -> [Int] {
+        let shifted = values.map { $0 < lateNight ? $0 + 1440 : $0 }.sorted()
+        var best: [Int] = []
+        for start in shifted {
+            let members = shifted.filter { $0 >= start && $0 <= start + 60 }
+            if members.count > best.count { best = members }
+        }
+        return best
+    }
+
+    static func cluster(_ values: [Int], minSamples: Int) -> ClockTime? {
+        let best = bestGroup(values)
+        guard best.count >= minSamples else { return nil }
+        return ClockTime(minuteOfDay: best[best.count / 2] % 1440)
     }
 
     public func daysBack(_ count: Int) -> [DayRecord] {

@@ -17,7 +17,7 @@ Pick one at the top of the window:
 
 | Mode | Best for | What it does |
 |---|---|---|
-| **Smart** (default) | Most people | Holds your everyday limit (80%, or 85, 90, 95). It learns when you usually unplug, and before then charges to your target (100%, or 80, 90). |
+| **Smart** (default) | Most people | Holds your everyday limit (80%, or 85, 90, 95). It learns when you usually unplug, and before then charges to your target (100%, or 80, 90). Both numbers have a Custom option for any value. |
 | **Fixed schedule** | People who want to set the times | Splits the day into blocks, each holding the limit you choose (80, 85, 90, 95, 100). Time outside any block charges to 100%. Each block can turn on discharging, which needs the discharge helper. You can also choose "Full before unplugging". |
 | **Always full** | Desktops, or machines that are always plugged in | Charges to 100% whenever it's on power. |
 
@@ -26,7 +26,7 @@ All three modes have heat protection: when the battery reaches 35°C the limit d
 ## How it learns your habits
 
 - The first time each day you stay on power for 30 minutes or more and then unplug counts as one "unplugged" event. Brief unplugs, like moving the laptop around, don't count.
-- Once 3 of those land in the same half hour, it can say "you usually unplug around …", and fills the battery before that time.
+- Once 3 of those land within one hour of each other, it can say "you usually unplug around …", and fills the battery before that time. Under "Habits and details" in Smart mode you can see which unplugs were recorded, how many more are needed, and tips.
 - Records stay on this Mac and are never uploaded. To start over, tap "Learn again" in Smart mode. To stop learning, turn off "Remember my charging habits"; it then only uses the time you set yourself.
 
 ## Interface

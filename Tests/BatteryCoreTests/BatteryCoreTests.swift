@@ -330,12 +330,14 @@ final class PlannerTests: XCTestCase {
         XCTAssertEqual(close?.liftNow, true, "离断电只剩 30 分钟，61 分钟的路走不完，要立刻放开")
     }
 
-    func testUnplugTargetClampedToChoices() {
+    /// 离电目标可以自定义：填 83 就是 83，只夹到 50 到 100 之间。
+    func testUnplugTargetKeepsCustomValuesInRange() {
         XCTAssertEqual(ChargePlanner.clampTarget(100), 100)
-        XCTAssertEqual(ChargePlanner.clampTarget(91), 90)
-        XCTAssertEqual(ChargePlanner.clampTarget(79), 80)
+        XCTAssertEqual(ChargePlanner.clampTarget(83), 83)
+        XCTAssertEqual(ChargePlanner.clampTarget(91), 91)
         XCTAssertEqual(ChargePlanner.clampTarget(200), 100)
-        XCTAssertEqual(ChargePlanner.clampTarget(0), 80)
+        XCTAssertEqual(ChargePlanner.clampTarget(0), 50)
+        XCTAssertTrue(ChargePlanner.targetChoices.allSatisfy { ChargePlanner.targetRange.contains($0) })
     }
 
     func testLateScheduleLiftsEarlier() {
@@ -428,12 +430,13 @@ final class TextTests: XCTestCase {
 
     func testGuide() {
         let bodies = GuideCopy.bodies.joined(separator: "\n")
-        XCTAssertEqual(GuideCopy.titles.count, 3, "引导只有三步")
-        XCTAssertEqual(GuideCopy.bodies.count, 3)
+        XCTAssertEqual(GuideCopy.titles.count, 5, "引导五步：是什么、怎么运行、怎么设置、怎么学习、其他")
+        XCTAssertEqual(GuideCopy.bodies.count, 5)
         XCTAssertTrue(bodies.contains("刘海"), "引导讲到刘海")
         XCTAssertTrue(bodies.contains("智能"), "引导先讲智能模式")
         XCTAssertTrue(bodies.contains("记满 3 次"), "引导讲学习习惯")
-        XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 60 }, "每步正文不超过 60 个字")
+        XCTAssertTrue(bodies.contains("自定义"), "引导讲到自定义数字")
+        XCTAssertTrue(GuideCopy.bodies.allSatisfy { $0.count <= 110 }, "每步正文两三行以内")
         XCTAssertFalse(bodies.contains("完全磁盘"), "引导不索要磁盘权限")
         XCTAssertFalse(bodies.contains("辅助功能"), "引导不索要辅助功能")
         XCTAssertFalse(bodies.contains("屏幕录制"))

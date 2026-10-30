@@ -61,12 +61,60 @@ final class JournalTests: XCTestCase {
         XCTAssertEqual(Double(journal.today?.powerMinutes ?? 0), 0, accuracy: 0.5)
     }
 
-    /// 票数一样多的两个时段，取较早的那个；每次启动结果都要一样。
-    func testTiedBucketsPickTheEarlierOne() {
+    /// 一小时之内记下三次就学会，取中间那次。不能因为正好跨过半点就学不会。
+    func testThreeWithinAnHourAreLearnedAcrossHalfHours() {
+        let times = [20 * 60 + 25, 20 * 60 + 40, 20 * 60 + 55]
+        XCTAssertEqual(HabitJournal.cluster(times, minSamples: 3), ClockTime(minuteOfDay: 20 * 60 + 40))
+    }
+
+    /// 23 点半和 0 点 10 分是同一个习惯，不能被分成两群。
+    func testLateNightCountsAsTheSameNight() {
+        let times = [23 * 60 + 40, 10, 20]
+        XCTAssertEqual(HabitJournal.cluster(times, minSamples: 3), ClockTime(minuteOfDay: 10))
+    }
+
+    /// 次数够，但散在一天里，一小时之内凑不够三次：不猜。
+    func testSpreadOutUnplugsAreNotLearned() {
+        XCTAssertNil(HabitJournal.cluster([8 * 60, 12 * 60, 18 * 60, 22 * 60], minSamples: 3))
+    }
+
+    /// 两群人数一样多时取较早的那群，每次启动结果都要一样。
+    func testTiedGroupsPickTheEarlierOne() {
         let morning = 10 * 60
         let evening = 20 * 60
-        XCTAssertEqual(HabitJournal.vote([morning, evening, morning, evening, morning, evening], minSamples: 3),
+        XCTAssertEqual(HabitJournal.cluster([morning, evening, morning, evening, morning, evening], minSamples: 3),
                        ClockTime(minuteOfDay: morning))
+    }
+
+    /// 学习进度：一共记下几次，一小时之内最多几次；最近记录从新到旧，带着日期。
+    func testLearnProgressAndRecentUnplugs() {
+        var journal = HabitJournal()
+        journal.unplugMinutes = [23 * 60 + 30, 23 * 60 + 45]
+        var monday = DayRecord(day: "2026-10-26")
+        monday.unplug = 23 * 60 + 30
+        var tuesday = DayRecord(day: "2026-10-27")
+        tuesday.unplug = 23 * 60 + 45
+        var quiet = DayRecord(day: "2026-10-28")
+        quiet.unplug = nil
+        journal.days = [monday, tuesday, quiet]
+
+        let progress = journal.learnProgress()
+        XCTAssertEqual(progress, LearnProgress(recorded: 2, bestCluster: 2))
+        XCTAssertFalse(progress.learned)
+        XCTAssertEqual(journal.recentUnplugs(5), [UnplugEvent(day: "2026-10-27", minute: 23 * 60 + 45),
+                                                  UnplugEvent(day: "2026-10-26", minute: 23 * 60 + 30)])
+    }
+
+    /// 「够用」的一天：用电加接电合计 2 小时。少于这个不算数。
+    func testUsableDaysCountsOnlyFullEnoughDays() {
+        var journal = HabitJournal()
+        var enough = DayRecord(day: "2026-10-27")
+        enough.batteryMinutes = 90
+        enough.powerMinutes = 60
+        var short = DayRecord(day: "2026-10-28")
+        short.batteryMinutes = 30
+        journal.days = [enough, short]
+        XCTAssertEqual(HabitTips.usableDays(journal: journal), 1)
     }
 
     /// 拔插只在当天第一次记，白天反复插拔不把习惯冲散。

@@ -39,8 +39,20 @@ public enum HabitTips {
     /// 至少这么多天有足够记录才开口，否则样本太少。
     public static let minDays = 3
 
+    /// 一天算「够用」的最少记录：用电或接电合计 2 小时。
+    public static let usableMinutes = 120
+
+    /// 最近 7 天里有几天够用。界面用它说「还差几天」。
+    public static func usableDays(journal: HabitJournal) -> Int {
+        recentUsable(journal).count
+    }
+
+    private static func recentUsable(_ journal: HabitJournal) -> [DayRecord] {
+        journal.daysBack(7).filter { $0.batteryMinutes + $0.powerMinutes >= Double(usableMinutes) }
+    }
+
     public static func items(journal: HabitJournal, calendar: Calendar = .current) -> [HabitTip] {
-        let recent = journal.daysBack(7).filter { $0.batteryMinutes + $0.powerMinutes >= 120 }
+        let recent = recentUsable(journal)
         guard recent.count >= minDays else { return [] }
         var tips: [HabitTip] = []
 

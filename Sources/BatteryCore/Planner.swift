@@ -126,14 +126,15 @@ public enum ChargePlanner {
     /// 80% 到 100% 这一段的保守速度，大约一小时 20%。
     public static let defaultRate = 0.33
 
-    /// 离电目标允许的取值范围。和日常上限用同一组档位，但含义不同：这是离开电源那一刻要的电量。
+    /// 离电目标的常用档位。档位之外可以自定义，范围见 `targetRange`。
+    /// 这是离开电源那一刻要的电量，和日常上限是两回事。
     public static let targetChoices = [80, 90, 100]
+    public static let targetRange = 50...100
     public static let defaultTarget = 100
 
+    /// 只夹到范围里，不再吸附到档位：填 83 就是 83。
     public static func clampTarget(_ value: Int) -> Int {
-        if targetChoices.contains(value) { return value }
-        let clamped = min(100, max(80, value))
-        return targetChoices.min(by: { abs($0 - clamped) < abs($1 - clamped) }) ?? defaultTarget
+        min(targetRange.upperBound, max(targetRange.lowerBound, value))
     }
 
     /// 只看断电前 window 分钟以内。只会比时间表更早放开，不会更晚。

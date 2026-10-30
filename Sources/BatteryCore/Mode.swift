@@ -109,15 +109,16 @@ public struct SmartDecision: Equatable, Sendable {
 /// 2. 按离电时间反推最晚什么时候放开；到了那一刻就放开到离电目标。只往高放，不往低收。
 /// 3. 电池偏热时最高 80%，热的时候不为了满电硬充。
 public enum SmartPolicy {
+    /// 日常上限的常用档位。档位之外可以自定义，范围见 `dailyCapRange`。100 不在这里：要 100 请用「一直充满」。
     public static let dailyCapChoices = [80, 85, 90, 95]
+    public static let dailyCapRange = 50...95
     public static let defaultDailyCap = 80
     /// 离电时间往前看多久。超过这个时间就不给预计，因为太早的估计没有意义。
     public static let window = 480
 
+    /// 只夹到范围里，不再吸附到档位：填 83 就是 83。
     public static func clampDailyCap(_ value: Int) -> Int {
-        if dailyCapChoices.contains(value) { return value }
-        let clamped = min(95, max(80, value))
-        return dailyCapChoices.min(by: { abs($0 - clamped) < abs($1 - clamped) }) ?? defaultDailyCap
+        min(dailyCapRange.upperBound, max(dailyCapRange.lowerBound, value))
     }
 
     /// 预测里用的时间表：整天停在 `cap`。拼成两段，中间没有空档，免得空档被当成 100%。

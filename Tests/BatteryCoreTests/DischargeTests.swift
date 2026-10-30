@@ -170,11 +170,13 @@ final class DischargeTests: XCTestCase {
         settings.unplugTarget = 90
         let decoded = try XCTUnwrap(AppSettings.decode(settings.encoded()))
         XCTAssertEqual(decoded.unplugTarget, 90)
-        // 文件里写了个不认识的数，落回最近的档位，不崩。
-        let odd = try XCTUnwrap(AppSettings.decode(Data(#"{"unplugTarget": 91}"#.utf8)))
-        XCTAssertEqual(odd.unplugTarget, 90)
+        // 自定义的数原样保留；文件里超出范围的数夹到范围里，不崩。
+        let custom = try XCTUnwrap(AppSettings.decode(Data(#"{"unplugTarget": 91}"#.utf8)))
+        XCTAssertEqual(custom.unplugTarget, 91)
         let huge = try XCTUnwrap(AppSettings.decode(Data(#"{"unplugTarget": 500}"#.utf8)))
         XCTAssertEqual(huge.unplugTarget, 100)
+        let tiny = try XCTUnwrap(AppSettings.decode(Data(#"{"unplugTarget": 3}"#.utf8)))
+        XCTAssertEqual(tiny.unplugTarget, 50)
     }
 
     func testDischargeOffDayRoundTrip() throws {
@@ -305,10 +307,12 @@ final class ModeTests: XCTestCase {
         XCTAssertEqual(decision.decision.reason, .heat)
     }
 
-    func testSmartDailyCapClamping() {
+    /// 日常上限可以自定义：填 88 就是 88，只夹到 50 到 95 之间。100 不在智能模式里，要 100 请用「一直充满」。
+    func testSmartDailyCapKeepsCustomValuesInRange() {
         XCTAssertEqual(SmartPolicy.clampDailyCap(80), 80)
-        XCTAssertEqual(SmartPolicy.clampDailyCap(88), 90)
-        XCTAssertEqual(SmartPolicy.clampDailyCap(50), 80)
+        XCTAssertEqual(SmartPolicy.clampDailyCap(88), 88)
+        XCTAssertEqual(SmartPolicy.clampDailyCap(50), 50)
+        XCTAssertEqual(SmartPolicy.clampDailyCap(10), 50)
         XCTAssertEqual(SmartPolicy.clampDailyCap(100), 95, "智能模式没有 100 这一档，要 100 请用「一直充满」")
     }
 

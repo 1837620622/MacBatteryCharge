@@ -76,13 +76,15 @@ final class LocalizeTests: XCTestCase {
         XCTAssertTrue(Lang.isEnglish)
     }
 
-    /// 词典里的句子不该是空的，也不该还留着中文占位符。
+    /// 词典里的句子不该是空的，占位符数量也要和原文一致。英文和繁体都查。
     func testTableIsClean() {
-        for (key, value) in Table.english {
-            XCTAssertFalse(key.isEmpty)
-            XCTAssertFalse(value.isEmpty, "翻译为空：\(key)")
-            XCTAssertEqual(value.components(separatedBy: "%@").count, key.components(separatedBy: "%@").count,
-                           "占位符数量对不上：\(key)")
+        for table in [Table.english, Table.traditional] {
+            for (key, value) in table {
+                XCTAssertFalse(key.isEmpty)
+                XCTAssertFalse(value.isEmpty, "翻译为空：\(key)")
+                XCTAssertEqual(value.components(separatedBy: "%@").count, key.components(separatedBy: "%@").count,
+                               "占位符数量对不上：\(key)")
+            }
         }
     }
 
