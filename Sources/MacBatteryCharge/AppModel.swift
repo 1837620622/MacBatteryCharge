@@ -174,7 +174,7 @@ final class AppModel: ObservableObject {
         if outageDeadline == nil, settings.mode == .smart, let learned = learnedUnplug { return learned }
         return deadlineNow
     }
-    /// 现在是不是在停电里。停电时没有电源，低电量模式开着省电。
+    /// 现在是不是在停电里。停电时没有电源；要不要开低电量，看 settings.outageLowPower。
     var outageNow: Bool {
         settings.outageEnabled && Outage.isOut(minute: minute, weekday: weekday, start: settings.outageStart, end: settings.outageEnd)
     }
@@ -503,11 +503,10 @@ final class AppModel: ObservableObject {
 
     /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效：放电时 20 秒续一次；平时每 5 分钟报一次到，
     /// 帮手才知道程序还在，原生以外的上限才会一直保留。
-    /// 低电量模式这一刻应该是什么。停电时开（没有电源，开着省电），来电就关；
+    /// 低电量模式这一刻应该是什么。停电时，用户勾了「停电时保持低电量」才开，来电就关；
     /// 只关掉自己开过的，用户手动设的不动（nil）。
     private var wantedLowPower: Bool? {
-        if outageNow { return true }
-        return lastSentLowPower == true ? false : nil
+        Outage.lowPowerWanted(cutNow: outageNow, keep: settings.outageLowPower, wereOn: lastSentLowPower == true)
     }
 
     private func syncHelper() {

@@ -26,7 +26,7 @@ English · [繁體中文](README.zh-Hant.md) · [简体中文](README.md)
 - **Learns when you usually unplug**: after 3 unplugs within one hour, it fills the battery to your target (80, 90 or 100, or any value you enter) before that time.
 - **Full before unplugging** (Fixed schedule): works out from this Mac's real charging speed, and lifts the limit early when there's time, so the battery is full when you unplug.
 - **Top up**: charges to 100% right away. It stops when you unplug.
-- **Weekday power cuts (dorm)**: charges to your target before the cut. During the cut it turns on Low Power Mode to save battery, and turns it off when power returns. Weekends are not affected.
+- **Weekday power cuts (dorm)**: charges to your target before the cut. With **Keep Low Power Mode during power cuts** on, it turns on Low Power Mode during the cut to save battery, and turns it off when power returns. Weekends are not affected.
 
 ### Warnings and alerts
 
@@ -116,7 +116,7 @@ If you lose power on weekday nights, for example in a dorm, turn on "Weekday pow
 
 - It only applies Monday to Friday. On weekends you have power all day, and the settings above apply as usual.
 - Before the cut, the app charges to your target (100% by default), so the battery is full when the power goes out.
-- During the cut, the app turns on macOS Low Power Mode to save battery. When power returns, it turns Low Power Mode off right away, so charging during the day doesn't slow you down.
+- Low Power Mode is off during the cut by default, and the battery charges as usual. Tick **Keep Low Power Mode during power cuts** and the app turns on macOS Low Power Mode during the cut to save battery. When power returns, it turns Low Power Mode off right away, so charging during the day doesn't slow you down.
 - It only turns off what it turned on itself; anything you set by hand stays.
 - Low Power Mode uses the same discharge helper, so you only install it once.
 
