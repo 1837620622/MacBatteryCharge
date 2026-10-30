@@ -22,10 +22,12 @@ public enum Outage {
         return false
     }
 
-    /// 停电时低电量模式该是什么。停电中、并且用户勾了「停电时保持低电量」，就开；
-    /// 其余时候只关掉自己开过的（`wereOn`），没开过就不碰（nil），用户手动设的不动。
-    public static func lowPowerWanted(cutNow: Bool, keep: Bool, wereOn: Bool) -> Bool? {
-        if cutNow && keep { return true }
-        return wereOn ? false : nil
+    /// 停电时低电量模式该是什么。
+    /// - 我们开过的（`wereOn`）：停电中且勾着就续期；否则关掉。
+    /// - 我们没开过的：停电中、勾着、并且现在不是已经开着（`alreadyOn`，用户自己开的）才接手去开；其余不碰（nil）。
+    public static func lowPowerWanted(cutNow: Bool, keep: Bool, wereOn: Bool, alreadyOn: Bool) -> Bool? {
+        let cutAndKeep = cutNow && keep
+        if wereOn { return cutAndKeep }
+        return cutAndKeep && !alreadyOn ? true : nil
     }
 }

@@ -13,7 +13,7 @@ public enum HelperInfo {
     public static let protocolVersion = 2
     /// 程序隔一会儿就续一次。帮手超过这个时间没收到，就自己接回电源，程序崩了也不会一直放下去。
     public static let maxLease = 300
-    /// 低电量模式没人续期多久就关（程序每分钟左右续一次）。
+    /// 低电量模式没人续期多久就关（程序开着低电量时，最多隔 30 秒续一次）。
     public static let lowPowerLease = 180
     /// 帮手自己设的上限（旧系统、Intel）超过这么久没有人续期，就放掉，恢复原样。
     public static let limitLifetime: TimeInterval = 24 * 3600

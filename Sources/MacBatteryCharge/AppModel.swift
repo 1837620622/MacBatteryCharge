@@ -99,14 +99,23 @@ final class AppModel: ObservableObject {
     private var lastHelperSend = Date.distantPast
     /// 最近一次温度和电量都读得到的时间。读数缺一下时用它判断要不要保持放电。
     private var lastUsableReadingAt = Date.distantPast
-    /// 低电量模式：上一次发给帮手的值（nil 表示没管过）。
-    private var lastSentLowPower: Bool?
+    /// 低电量模式：上一次帮手确认的值（nil 表示没管过，true 表示是我们开的）。
+    /// true 会存到 UserDefaults 里，程序重开或者重启以后还能把它关掉。
+    private var lastSentLowPower: Bool? {
+        didSet {
+            guard !preview else { return }
+            UserDefaults.standard.set(lastSentLowPower == true, forKey: Self.lowPowerClaimKey)
+        }
+    }
+    private static let lowPowerClaimKey = "lowPowerClaimed"
     /// 系统接受的充电上限档位（启动时读一次，通常是 80、85、90、95、100）。没读好之前不写上限。
     private var nativeChoices: [Int] = []
     private var nativeChoicesLoaded = false
 
     init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
+        // 上次是我们开的低电量模式，这次启动先记下来，同步时就会把它关掉（不管是不是还在停电）。
+        lastSentLowPower = (!preview && UserDefaults.standard.bool(forKey: Self.lowPowerClaimKey)) ? true : nil
         let loaded = preview ? AppSettings() : AppSettings.load()
         var start = loaded
         // 只给截图用：不写回设置文件。
@@ -504,9 +513,10 @@ final class AppModel: ObservableObject {
     /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效：放电时 20 秒续一次；平时每 5 分钟报一次到，
     /// 帮手才知道程序还在，原生以外的上限才会一直保留。
     /// 低电量模式这一刻应该是什么。停电时，用户勾了「停电时保持低电量」才开，来电就关；
-    /// 只关掉自己开过的，用户手动设的不动（nil）。
+    /// 只关掉自己开过的，用户手动设的不动（nil）。低电量本来就开着（用户自己开的）时，停电也不接手。
     private var wantedLowPower: Bool? {
-        Outage.lowPowerWanted(cutNow: outageNow, keep: settings.outageLowPower, wereOn: lastSentLowPower == true)
+        Outage.lowPowerWanted(cutNow: outageNow, keep: settings.outageLowPower, wereOn: lastSentLowPower == true,
+                              alreadyOn: ProcessInfo.processInfo.isLowPowerModeEnabled)
     }
 
     private func syncHelper() {
@@ -563,7 +573,11 @@ final class AppModel: ObservableObject {
             helperBusy = false
             discharging = false
             helper = nil
-            if result == .ok { adapterMayBeCut = false }
+            if result == .ok {
+                adapterMayBeCut = false
+                // 卸载前帮手已经关掉了低电量模式，我们开的那次也就没了。
+                lastSentLowPower = nil
+            }
             switch result {
             case .ok:
                 message = Message(tone: .success, text: T("放电帮手已卸载，电源已接回。"))
@@ -584,7 +598,9 @@ final class AppModel: ObservableObject {
     func releaseHelperForQuit() async {
         let request = HelperRequest(cmd: .apply, limit: lastSentLimit, dischargeTo: nil,
                                     lowPower: lastSentLowPower == true ? false : nil)
-        _ = await Task.detached(priority: .userInitiated) { HelperClient.send(request, timeout: 1) }.value
+        let status = await Task.detached(priority: .userInitiated) { HelperClient.send(request, timeout: 1) }.value
+        // 帮手回了话，我们开的低电量模式就已经关掉，记录也清掉。没回话就留着，下次启动再关。
+        if status != nil { lastSentLowPower = nil }
     }
 
     // MARK: 预测
