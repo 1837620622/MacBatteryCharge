@@ -101,7 +101,7 @@ Design docs (in Chinese): [设计要求](docs/设计要求.md), [设计核对](d
 Charge Limit is free and open source. Every feature is free, and it will stay free for individuals.
 
 - **Individuals:** if it keeps you charged when you need it, you're welcome to sponsor it. Any amount is fine, and it unlocks nothing.
-- **Companies:** sponsorship, custom work, and support can be arranged separately. See [enterprise cooperation](docs/企业合作.md) (in Chinese).
+- **Companies:** sponsorship, custom work, and support can be arranged separately. See [enterprise cooperation](docs/企业合作.en.md).
 
 Payment options aren't set up yet. To sponsor or discuss a partnership, open an issue at [Issues](https://github.com/1837620622/MacFullBar/issues/new/choose) with the title "Sponsorship" or "Enterprise cooperation", and the author will reply.
 
