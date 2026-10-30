@@ -99,9 +99,8 @@ final class AppModel: ObservableObject {
     private var lastHelperSend = Date.distantPast
     /// 最近一次温度和电量都读得到的时间。读数缺一下时用它判断要不要保持放电。
     private var lastUsableReadingAt = Date.distantPast
-    /// 低电量模式：上一次发给帮手的值（nil 表示没管过）；这一次接电源有没有充完。
+    /// 低电量模式：上一次发给帮手的值（nil 表示没管过）。
     private var lastSentLowPower: Bool?
-    private var lowPowerChargeDone = false
 
     init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
@@ -159,10 +158,22 @@ final class AppModel: ObservableObject {
     /// 从历史里学到的拔电源时间，智能模式用。
     /// 学到的「平时几点拔电源」。关掉学习、或者记录还不够，就是 nil。
     var learnedUnplug: ClockTime? { settings.learnHabits ? journal.learnedUnplug() : nil }
-    /// 备电要按的离电时间。智能模式先用学到的；没学会，或者是别的模式，就用自己设的那个（开着才有）。
+    private var weekday: Int { Calendar.current.component(.weekday, from: now) }
+    /// 工作日停电的开始时间：今天是工作日、又开着停电，就是今晚断电的时间。离电前要充满，所以它就是离电时间。
+    var outageDeadline: ClockTime? {
+        guard settings.outageEnabled, Outage.isWorkday(weekday: weekday) else { return nil }
+        return settings.outageStart
+    }
+    /// 离电前要充满的时间：停电优先，其次是自己设的（开着才有）。
+    var deadlineNow: ClockTime? { outageDeadline ?? (settings.deadlineEnabled ? settings.deadline : nil) }
+    /// 备电要按的离电时间。停电的日子就是停电开始；智能模式其次用学到的；再不然用 `deadlineNow`。
     var departureTime: ClockTime? {
-        if settings.mode == .smart, let learned = learnedUnplug { return learned }
-        return settings.deadlineEnabled ? settings.deadline : nil
+        if outageDeadline == nil, settings.mode == .smart, let learned = learnedUnplug { return learned }
+        return deadlineNow
+    }
+    /// 现在是不是在停电里。停电时没有电源，低电量模式开着省电。
+    var outageNow: Bool {
+        settings.outageEnabled && Outage.isOut(minute: minute, weekday: weekday, start: settings.outageStart, end: settings.outageEnd)
     }
     /// 智能模式这一轮算出来的结果，界面用它说人话。
     private(set) var smartDecision: SmartDecision?
@@ -265,17 +276,17 @@ final class AppModel: ObservableObject {
         }
         wasExternal = external
         if let until = topUpUntil, value.date >= until { topUpUntil = nil }
-        if let lift = deadlineLift, value.date >= lift.until || !settings.deadlineEnabled || settings.mode != .fixed {
+        if let lift = deadlineLift, value.date >= lift.until || deadlineNow == nil || settings.mode != .fixed {
             deadlineLift = nil
         }
 
         // 断电前放开只属于固定模式。智能模式自己算备电时间，不在这里另起一套，也就不会发错通知。
-        if settings.mode == .fixed, settings.deadlineEnabled, external, deadlineLift == nil, let percent = battery.percent,
+        if settings.mode == .fixed, let deadline = deadlineNow, external, deadlineLift == nil, let percent = battery.percent,
            let plan = ChargePlanner.plan(schedule: schedule, minute: minute, percent: percent,
-                                         deadline: settings.deadline, target: settings.unplugTarget,
+                                         deadline: deadline, target: settings.unplugTarget,
                                          rate: learnedRate), plan.liftNow {
             deadlineLift = (plan.target, value.date.addingTimeInterval(Double(plan.minutesToDeadline) * 60))
-            notify("deadline", T("提前放开到 %@%", ["\(plan.target)"]), T("按这台机器的充电速度，赶在 %@ 断电前充满。", ["\(settings.deadline.display)"]))
+            notify("deadline", T("提前放开到 %@%", ["\(plan.target)"]), T("按这台机器的充电速度，赶在 %@ 断电前充满。", ["\(deadline.display)"]))
         }
 
         helper = value.helper
@@ -283,11 +294,6 @@ final class AppModel: ObservableObject {
         if let status = value.helper { adapterMayBeCut = status.adapterEnabled == false }
         let previousHeat = decision.reason == .heat
         recompute()
-        if !external {
-            lowPowerChargeDone = false
-        } else if let percent = battery.percent, percent >= decision.limit - 1 {
-            lowPowerChargeDone = true
-        }
         updateDischarge()
         recomputeForecast()
         if decision.reason == .heat && !previousHeat {
@@ -316,8 +322,8 @@ final class AppModel: ObservableObject {
             let input = SmartInput(percent: battery.percent, external: battery.externalConnected || adapterCut,
                                    minute: minute, dailyCap: settings.smartDailyCap,
                                    unplugTarget: settings.unplugTarget,
-                                   deadline: settings.deadlineEnabled ? settings.deadline : nil,
-                                   learnedUnplug: learnedUnplug, rate: learnedRate,
+                                   deadline: deadlineNow,
+                                   learnedUnplug: outageDeadline == nil ? learnedUnplug : nil, rate: learnedRate,
                                    heat: heatActive, topUp: topUpUntil != nil)
             let smart = SmartPolicy.decide(input)
             smartDecision = smart
@@ -459,12 +465,11 @@ final class AppModel: ObservableObject {
 
     /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效：放电时 20 秒续一次；平时每 5 分钟报一次到，
     /// 帮手才知道程序还在，原生以外的上限才会一直保留。
-    /// 低电量模式这一刻应该是什么。只在夜间充电、没充完时开；白天充电、充完电都关；
-    /// 拔掉电源时，只关掉自己开过的，用户手动设的不动（nil）。
+    /// 低电量模式这一刻应该是什么。停电时开（没有电源，开着省电），来电就关；
+    /// 只关掉自己开过的，用户手动设的不动（nil）。
     private var wantedLowPower: Bool? {
-        let charging = battery.externalConnected || adapterCut
-        guard charging else { return lastSentLowPower == true ? false : nil }
-        return LowPowerPolicy.wantsWhileCharging(minute: minute, chargeDone: lowPowerChargeDone)
+        if outageNow { return true }
+        return lastSentLowPower == true ? false : nil
     }
 
     private func syncHelper() {
@@ -589,6 +594,7 @@ final class AppModel: ObservableObject {
             }
         }
         if settings.deadlineEnabled != old.deadlineEnabled || settings.deadline != old.deadline
+            || settings.outageEnabled != old.outageEnabled || settings.outageStart != old.outageStart
             || settings.unplugTarget != old.unplugTarget || settings.mode != old.mode { deadlineLift = nil }
         // 临时充满的结束时间是按模式定的，换了模式就重新来。
         if settings.mode != old.mode { topUpUntil = nil }
@@ -1018,7 +1024,9 @@ final class AppModel: ObservableObject {
                                       rate: learnedRate, window: 1439)
         }
         guard let plan else { return nil }
-        let title = T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.display)", "\(plan.target)"])
+        let title = outageDeadline != nil
+            ? T("%@ 停电 · 充到 %@%", ["\(deadline.display)", "\(plan.target)"])
+            : T("%@ 左右拔电源 · 充到 %@%", ["\(deadline.display)", "\(plan.target)"])
         if percent >= plan.target {
             return Tonight(title: title, detail: T("现在 %@%，已经够了", ["\(percent)"]), symbol: "checkmark.circle.fill", tone: .success)
         }

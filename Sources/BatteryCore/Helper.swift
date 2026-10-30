@@ -190,20 +190,3 @@ public enum HelperCoding {
         return data
     }
 }
-
-/// 低电量模式什么时候开。只在夜间充电、还没充完的时候开；白天充电、充完电都关。
-public enum LowPowerPolicy {
-    /// 夜间从 18:00 到次日 06:00。
-    public static let nightStart = 18 * 60
-    public static let nightEnd = 6 * 60
-
-    public static func isNight(_ minute: Int) -> Bool {
-        let m = ((minute % 1440) + 1440) % 1440
-        return m >= nightStart || m < nightEnd
-    }
-
-    /// 正在接电源时，低电量应该开还是关。
-    public static func wantsWhileCharging(minute: Int, chargeDone: Bool) -> Bool {
-        isNight(minute) && !chargeDone
-    }
-}

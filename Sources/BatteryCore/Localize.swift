@@ -418,9 +418,16 @@ public enum Table {
         "企业合作": "Enterprise cooperation",
         "一直插着电源时，电池长时间停在高电量最伤电池。日常上限设在 80%，比一直满电好。": "Staying plugged in at a high charge ages the battery fastest. A daily limit of 80% is kinder than sitting at 100%.",
         "每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。": "The first long stretch on power each day counts once when you unplug. Once %@ of them fall in the same half hour, that time is used.",
-        "已经装好。它负责固定时间表里的放电，也负责夜间充电时的低电量模式。": "Installed. It handles discharging in fixed schedules and Low Power Mode while charging at night.",
+        "已经装好。它负责固定时间表里的放电，也负责停电时的低电量模式。": "Installed. It handles discharging in fixed schedules, and Low Power Mode during power cuts.",
         "放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "Needed for discharging and Low Power Mode. The system asks for your administrator password once; it never passes through this app.",
         "放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。": "The discharge helper is an older version. Reinstall it for discharging and Low Power Mode. The charge limit still works.",
+        "工作日停电": "Weekday power cuts",
+        "周一到周五停电": "Power off on weekdays",
+        "停电的时间": "Power off at",
+        "来电的时间": "Power back at",
+        "低电量模式要放电帮手，在下面「高级」里装一次就行。": "Low Power Mode needs the discharge helper. Install it once under Advanced below.",
+        "住宿舍、周一到周五这段时间停电时用。停电前会充到你设的目标，停电时开低电量模式省电，来电后关掉。周末在家不停电，照常用主窗口里的设置。": "For power cuts on weekdays, such as in a dorm. Before the cut, the battery charges to your target. During the cut, Low Power Mode turns on to save battery, and turns off when power returns. Weekends have power all day, so the main window settings apply as usual.",
+        "%@ 停电 · 充到 %@%": "Power off at %@ · charge to %@%",
     ]
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
@@ -762,8 +769,15 @@ public enum Table {
         "企业合作": "企業合作",
         "一直插着电源时，电池长时间停在高电量最伤电池。日常上限设在 80%，比一直满电好。": "一直插著電源時，電池長時間停在高電量最傷電池。日常上限設在 80%，比一直滿電好。",
         "每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。": "每天第一次長時間接著電源後拔掉，就記作一次。同一個半小時裡記滿 %@ 次，就按那個時間來。",
-        "已经装好。它负责固定时间表里的放电，也负责夜间充电时的低电量模式。": "已經裝好。它負責固定時間表裡的放電，也負責夜間充電時的低電量模式。",
+        "已经装好。它负责固定时间表里的放电，也负责停电时的低电量模式。": "已經裝好。它負責固定時間表裡的放電，也負責停電時的低電量模式。",
         "放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "放電和低電量模式需要它。安裝時系統會問一次管理員密碼，密碼不經過本軟體。",
         "放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。": "放電幫手是舊版本：放電和低電量模式要重新安裝一次。充電上限不受影響。",
+        "工作日停电": "工作日停電",
+        "周一到周五停电": "週一到週五停電",
+        "停电的时间": "停電的時間",
+        "来电的时间": "來電的時間",
+        "低电量模式要放电帮手，在下面「高级」里装一次就行。": "低電量模式要放電幫手，在下面「進階」裡裝一次就行。",
+        "住宿舍、周一到周五这段时间停电时用。停电前会充到你设的目标，停电时开低电量模式省电，来电后关掉。周末在家不停电，照常用主窗口里的设置。": "住宿舍、週一到週五這段時間停電時用。停電前會充到你設的目標，停電時開低電量模式省電，來電後關掉。週末在家不停電，照常用主視窗裡的設定。",
+        "%@ 停电 · 充到 %@%": "%@ 停電 · 充到 %@%",
     ]
 }

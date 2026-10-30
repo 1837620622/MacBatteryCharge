@@ -125,17 +125,6 @@ final class ModeDecisionTests: XCTestCase {
         XCTAssertFalse(ChargePolicy.keepsDischargingThroughGap(previous: true, readingUsable: true, secondsSinceUsable: 0))
     }
 
-    /// 低电量：夜间（18:00 到次日 06:00）才可能开；白天充电一律关；充完电也关。
-    func testLowPowerOnlyAtNightWhileCharging() {
-        XCTAssertFalse(LowPowerPolicy.isNight(at(17, 59)), "17:59 还是白天")
-        XCTAssertTrue(LowPowerPolicy.isNight(at(18, 0)), "18:00 起算夜间")
-        XCTAssertTrue(LowPowerPolicy.isNight(at(5, 59)), "凌晨 05:59 还是夜间")
-        XCTAssertFalse(LowPowerPolicy.isNight(at(6, 0)), "06:00 起是白天")
-        XCTAssertTrue(LowPowerPolicy.wantsWhileCharging(minute: at(21, 0), chargeDone: false), "夜间充电、没充完：开")
-        XCTAssertFalse(LowPowerPolicy.wantsWhileCharging(minute: at(21, 0), chargeDone: true), "夜间充完电：关")
-        XCTAssertFalse(LowPowerPolicy.wantsWhileCharging(minute: at(10, 0), chargeDone: false), "白天充电：关")
-    }
-
     /// 预测用的「整天停在上限」时间表：不能有空档（空档是 100%），每一分钟都是这个上限。
     func testSmartForecastScheduleHoldsTheCapAllDay() {
         let flat = SmartPolicy.flatSchedule(cap: 85)
