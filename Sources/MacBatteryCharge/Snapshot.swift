@@ -44,6 +44,11 @@ enum Snapshot {
             let settingsPage = sampleModel(mode: .smart, language: language)
             ok = render(RootView(model: settingsPage, page: .settings), size: RootView.popoverSize, appearance: .aqua,
                         to: file("settings-\(tag).png")) && ok
+            // 工作日停电打开时，设置页会多出两行时间。这一页最容易被撑宽，单独拍一张。
+            let outagePage = sampleModel(mode: .smart, language: language)
+            outagePage.settings.outageEnabled = true
+            ok = render(RootView(model: outagePage, page: .settings), size: RootView.popoverSize, appearance: .aqua,
+                        to: file("settings-outage-\(tag).png")) && ok
             let guidePage = sampleModel(mode: .smart, language: language)
             guidePage.showGuide = true
             ok = render(RootView(model: guidePage), size: RootView.popoverSize, appearance: .aqua,

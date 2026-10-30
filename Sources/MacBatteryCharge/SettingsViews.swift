@@ -42,18 +42,25 @@ struct SettingsView: View {
                 Section {
                     Toggle(T("周一到周五停电"), isOn: $model.settings.outageEnabled)
                     // 时间行一直都在，关掉只是变灰。删掉再加回来，系统的时间选择器会跟着列表动画走，画面就花了。
-                    DatePicker(T("停电的时间"), selection: ClockPicker.binding($model.settings.outageStart),
-                               displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact)
-                        .fixedSize()
-                        .environment(\.locale, ClockPicker.locale)
-                        .disabled(!model.settings.outageEnabled)
-                    DatePicker(T("来电的时间"), selection: ClockPicker.binding($model.settings.outageEnd),
-                               displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact)
-                        .fixedSize()
-                        .environment(\.locale, ClockPicker.locale)
-                        .disabled(!model.settings.outageEnabled)
+                    // 标题放在行的左边，选择器本身不带标题。以前带标题的选择器把设置页撑宽，两边被裁掉。
+                    LabeledContent(T("停电的时间")) {
+                        DatePicker("", selection: ClockPicker.binding($model.settings.outageStart),
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .fixedSize()
+                            .environment(\.locale, ClockPicker.locale)
+                    }
+                    .disabled(!model.settings.outageEnabled)
+                    LabeledContent(T("来电的时间")) {
+                        DatePicker("", selection: ClockPicker.binding($model.settings.outageEnd),
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .fixedSize()
+                            .environment(\.locale, ClockPicker.locale)
+                    }
+                    .disabled(!model.settings.outageEnabled)
                     if !model.helperUsable {
                         Text(T("低电量模式要放电帮手，在下面「高级」里装一次就行。"))
                             .font(.caption)
