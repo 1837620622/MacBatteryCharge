@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model.saveNow()
+        model.flushRecords()
         Log.endSession()
     }
 

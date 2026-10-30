@@ -680,6 +680,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// 退出前把电量曲线和习惯记录同步写下来。平时每 4 分钟写一次，退出时不能丢掉这几分钟里的拔电源。
+    func flushRecords() {
+        guard !preview else { return }
+        try? history.save(to: AppSettings.historyURL)
+        try? journal.save(to: AppSettings.journalURL)
+    }
+
     /// 登录项要跟开关对上。系统的登录项服务会回话，可能慢，所以放到后台做，回来再改界面。
     func syncLogin() {
         guard !preview else { return }
