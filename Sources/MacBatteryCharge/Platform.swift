@@ -158,7 +158,7 @@ enum Installation {
         try? process.run()
     }
 
-    /// 关掉登录项，删掉配置，把程序移到废纸篓。充电上限和低电量保持现在的值。
+    /// 关掉登录项，删掉配置，把程序移到废纸篓。充电上限保持现在的值。
     private static func isBundleSafeToDelete(_ url: URL) -> Bool {
         url.pathExtension == "app" && url.lastPathComponent.hasPrefix("MacBatteryCharge") && !url.path.contains("/AppTranslocation/")
     }
