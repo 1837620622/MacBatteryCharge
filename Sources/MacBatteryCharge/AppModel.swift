@@ -99,6 +99,9 @@ final class AppModel: ObservableObject {
     private var lastHelperSend = Date.distantPast
     /// 最近一次温度和电量都读得到的时间。读数缺一下时用它判断要不要保持放电。
     private var lastUsableReadingAt = Date.distantPast
+    /// 低电量模式：上一次发给帮手的值（nil 表示没管过）；这一次接电源有没有充完。
+    private var lastSentLowPower: Bool?
+    private var lowPowerChargeDone = false
 
     init(preview: Bool = false, previewMode: ChargeMode? = nil, previewLanguage: AppLanguage? = nil) {
         self.preview = preview
@@ -280,6 +283,11 @@ final class AppModel: ObservableObject {
         if let status = value.helper { adapterMayBeCut = status.adapterEnabled == false }
         let previousHeat = decision.reason == .heat
         recompute()
+        if !external {
+            lowPowerChargeDone = false
+        } else if let percent = battery.percent, percent >= decision.limit - 1 {
+            lowPowerChargeDone = true
+        }
         updateDischarge()
         recomputeForecast()
         if decision.reason == .heat && !previousHeat {
@@ -400,7 +408,8 @@ final class AppModel: ObservableObject {
 
     /// 系统没有原生充电上限时（旧系统、Intel），上限交给帮手：直接停充，或者写 Intel 的 BCLM。
     private var helperHandlesLimit: Bool {
-        guard let helper, !helperOutdated else { return false }
+        // 旧版本的帮手照样能停充（充电上限不是新规则），所以版本不对也不能让上限失效。
+        guard let helper else { return false }
         guard helper.chargeControl == .direct || helper.chargeControl == .intelCeiling else { return false }
         return reading?.chargeLimit.isSupported != true
     }
@@ -411,7 +420,7 @@ final class AppModel: ObservableObject {
         guard !preview, battery.present else { return false }
         guard reading?.chargeLimit.isSupported != true else { return false }
         if helperHandlesLimit { return false }
-        guard let helper, !helperOutdated else { return false }
+        guard let helper else { return false }
         return helper.chargeControl == .system || helper.chargeControl == .none
     }
 
@@ -450,22 +459,38 @@ final class AppModel: ObservableObject {
 
     /// 把想要的状态告诉帮手。放电指令只有 2 分钟有效：放电时 20 秒续一次；平时每 5 分钟报一次到，
     /// 帮手才知道程序还在，原生以外的上限才会一直保留。
+    /// 低电量模式这一刻应该是什么。只在夜间充电、没充完时开；白天充电、充完电都关；
+    /// 拔掉电源时，只关掉自己开过的，用户手动设的不动（nil）。
+    private var wantedLowPower: Bool? {
+        let charging = battery.externalConnected || adapterCut
+        guard charging else { return lastSentLowPower == true ? false : nil }
+        return LowPowerPolicy.wantsWhileCharging(minute: minute, chargeDone: lowPowerChargeDone)
+    }
+
     private func syncHelper() {
-        guard !preview, !syncingHelper, let current = helper, !helperOutdated else { return }
+        guard !preview, !syncingHelper, let current = helper else { return }
+        // 旧版本的帮手只继续管充电上限；放电和低电量要等重新安装（新版本的安全规则才有）。
+        let outdated = helperOutdated
         let wantedLimit = helperHandlesLimit ? decision.limit : nil
-        let wantedTarget = discharging ? decision.limit : nil
-        let wantedResume = discharging ? schedule.resumeAt(at: minute) : nil
-        let same = current.limit == wantedLimit && current.dischargeTo == wantedTarget
-        let interval: TimeInterval = discharging ? 20 : 300
+        let wantedTarget = !outdated && discharging ? decision.limit : nil
+        let wantedResume = !outdated && discharging ? schedule.resumeAt(at: minute) : nil
+        let wantedLow = outdated ? nil : wantedLowPower
+        let same = current.limit == wantedLimit && current.dischargeTo == wantedTarget && wantedLow == lastSentLowPower
+        // 低电量开着时要续期（帮手的租期是 3 分钟），所以和放电一样每 20 秒送一次。
+        let interval: TimeInterval = discharging || wantedLow == true ? 20 : 300
         if same, Date().timeIntervalSince(lastHelperSend) < interval { return }
         lastHelperSend = Date()
         syncingHelper = true
         lastSentLimit = wantedLimit
         Task {
-            let request = HelperRequest(cmd: .apply, limit: wantedLimit, dischargeTo: wantedTarget, resumeAt: wantedResume, lease: 120)
+            let request = HelperRequest(cmd: .apply, limit: wantedLimit, dischargeTo: wantedTarget, resumeAt: wantedResume,
+                                        lease: 120, lowPower: wantedLow)
             let status = await Task.detached { HelperClient.send(request) }.value
             syncingHelper = false
-            if let status { helper = status }
+            if let status {
+                helper = status
+                lastSentLowPower = wantedLow
+            }
         }
     }
 
@@ -515,7 +540,8 @@ final class AppModel: ObservableObject {
     /// 程序退出时：电源接回来，充电上限不动。在后台做，调用的人最多等一秒多；帮手卡住也照样退出，
     /// 它的租约到期会自己接回电源。绝不在主线程上等它。
     func releaseHelperForQuit() async {
-        let request = HelperRequest(cmd: .apply, limit: lastSentLimit, dischargeTo: nil)
+        let request = HelperRequest(cmd: .apply, limit: lastSentLimit, dischargeTo: nil,
+                                    lowPower: lastSentLowPower == true ? false : nil)
         _ = await Task.detached(priority: .userInitiated) { HelperClient.send(request, timeout: 1) }.value
     }
 

@@ -181,7 +181,6 @@ public enum Table {
         "卸载放电帮手": "Remove the discharge helper",
         "反馈问题": "Report an issue",
         "取消": "Cancel",
-        "只有固定模式里打开「放电」的时间段才需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "Only needed for time blocks with Discharge on in Fixed mode. macOS asks for an administrator password once when installing; the app never sees it.",
         "启动 %@ · macOS %@": "Launched %@ · macOS %@",
         "固定时间表": "Fixed schedule",
         "备电和过热时通知我": "Notify me when topping up or overheating",
@@ -201,7 +200,6 @@ public enum Table {
         "已接": "Connected",
         "已经学会：你平时大约 %@ 前后拔电源。": "Learned: you usually unplug around %@.",
         "已经是最新版。": "You're up to date.",
-        "已经装好。只有固定模式里打开「放电」的时间段会用到它。": "Installed. Only time blocks with Discharge on in Fixed mode use it.",
         "已装": "Installed",
         "帮手": "helper",
         "帮手没有把电源接回来。请重启这台 Mac 之后再卸载。": "The helper did not reconnect power. Restart this Mac before uninstalling.",
@@ -239,7 +237,6 @@ public enum Table {
         "放电中，放到 %@% 停。": "Discharging, stopping at %@%.",
         "放电帮手": "Discharge helper",
         "放电帮手已卸载，电源已接回。": "The discharge helper is removed and power is reconnected.",
-        "放电帮手是旧版本，重新安装一次。": "The discharge helper is an old version. Reinstall it.",
         "放电帮手没有卸载：%@": "The discharge helper was not removed: %@",
         "放电帮手没有装好：%@": "The discharge helper was not installed: %@",
         "放电帮手装好了。": "The discharge helper is installed.",
@@ -421,6 +418,9 @@ public enum Table {
         "企业合作": "Enterprise cooperation",
         "一直插着电源时，电池长时间停在高电量最伤电池。日常上限设在 80%，比一直满电好。": "Staying plugged in at a high charge ages the battery fastest. A daily limit of 80% is kinder than sitting at 100%.",
         "每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。": "The first long stretch on power each day counts once when you unplug. Once %@ of them fall in the same half hour, that time is used.",
+        "已经装好。它负责固定时间表里的放电，也负责夜间充电时的低电量模式。": "Installed. It handles discharging in fixed schedules and Low Power Mode while charging at night.",
+        "放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "Needed for discharging and Low Power Mode. The system asks for your administrator password once; it never passes through this app.",
+        "放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。": "The discharge helper is an older version. Reinstall it for discharging and Low Power Mode. The charge limit still works.",
     ]
 
     /// 繁體中文，由简体自动转换（OpenCC 台湾用词），需要时可以人工改。
@@ -525,7 +525,6 @@ public enum Table {
         "卸载放电帮手": "解除安裝放電幫手",
         "反馈问题": "反饋問題",
         "取消": "取消",
-        "只有固定模式里打开「放电」的时间段才需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "只有固定模式裡開啟「放電」的時間段才需要它。安裝時系統會問一次管理員密碼，密碼不經過本軟體。",
         "启动 %@ · macOS %@": "啟動 %@ · macOS %@",
         "固定时间表": "固定時間表",
         "备电和过热时通知我": "備電和過熱時通知我",
@@ -545,7 +544,6 @@ public enum Table {
         "已接": "已接",
         "已经学会：你平时大约 %@ 前后拔电源。": "已經學會：你平時大約 %@ 前後拔電源。",
         "已经是最新版。": "已經是最新版。",
-        "已经装好。只有固定模式里打开「放电」的时间段会用到它。": "已經裝好。只有固定模式裡開啟「放電」的時間段會用到它。",
         "已装": "已裝",
         "帮手": "幫手",
         "帮手没有把电源接回来。请重启这台 Mac 之后再卸载。": "幫手沒有把電源接回來。請重啟這臺 Mac 之後再解除安裝。",
@@ -583,7 +581,6 @@ public enum Table {
         "放电中，放到 %@% 停。": "放電中，放到 %@% 停。",
         "放电帮手": "放電幫手",
         "放电帮手已卸载，电源已接回。": "放電幫手已解除安裝，電源已接回。",
-        "放电帮手是旧版本，重新安装一次。": "放電幫手是舊版本，重新安裝一次。",
         "放电帮手没有卸载：%@": "放電幫手沒有解除安裝：%@",
         "放电帮手没有装好：%@": "放電幫手沒有裝好：%@",
         "放电帮手装好了。": "放電幫手裝好了。",
@@ -765,5 +762,8 @@ public enum Table {
         "企业合作": "企業合作",
         "一直插着电源时，电池长时间停在高电量最伤电池。日常上限设在 80%，比一直满电好。": "一直插著電源時，電池長時間停在高電量最傷電池。日常上限設在 80%，比一直滿電好。",
         "每天第一次长时间接着电源后拔掉，就记作一次。同一个半小时里记满 %@ 次，就按那个时间来。": "每天第一次長時間接著電源後拔掉，就記作一次。同一個半小時裡記滿 %@ 次，就按那個時間來。",
+        "已经装好。它负责固定时间表里的放电，也负责夜间充电时的低电量模式。": "已經裝好。它負責固定時間表裡的放電，也負責夜間充電時的低電量模式。",
+        "放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。": "放電和低電量模式需要它。安裝時系統會問一次管理員密碼，密碼不經過本軟體。",
+        "放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。": "放電幫手是舊版本：放電和低電量模式要重新安裝一次。充電上限不受影響。",
     ]
 }

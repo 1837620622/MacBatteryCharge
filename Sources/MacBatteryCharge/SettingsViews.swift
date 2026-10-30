@@ -108,20 +108,20 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(T("放电帮手"))
             if model.helperUsable {
-                Text(T("已经装好。只有固定模式里打开「放电」的时间段会用到它。"))
+                Text(T("已经装好。它负责固定时间表里的放电，也负责夜间充电时的低电量模式。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(T("卸载放电帮手")) { model.removeHelper() }
                     .disabled(model.helperBusy)
             } else {
-                Text(T("只有固定模式里打开「放电」的时间段才需要它。安装时系统会问一次管理员密码，密码不经过本软件。"))
+                Text(T("放电和低电量模式需要它。安装时系统会问一次管理员密码，密码不经过本软件。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(T("安装放电帮手")) { model.installHelper() }
                     .disabled(model.helperBusy)
             }
             if model.helperOutdated {
-                Text(T("放电帮手是旧版本，重新安装一次。"))
+                Text(T("放电帮手是旧版本：放电和低电量模式要重新安装一次。充电上限不受影响。"))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }

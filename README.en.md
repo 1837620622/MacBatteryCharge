@@ -79,6 +79,14 @@ macOS's own charge limit only stops charging. It won't discharge while plugged i
 - During sleep it doesn't discharge, and it reconnects power. If the app quits, or it hasn't heard from the app for two minutes, it reconnects power by itself.
 - To remove it: Settings → Advanced → "Remove the discharge helper". It reconnects power before removing anything.
 
+## Low Power Mode (needs the discharge helper)
+
+While charging at night, the app turns on macOS Low Power Mode. It turns it off when charging finishes, or when you charge during the day. After you unplug, it only turns off what it turned on itself; anything you set by hand stays.
+
+- Night: 18:00 to 06:00.
+- Charging during the day: off. If it's on, the app turns it off. Low Power Mode slows the Mac down, which is noticeable at work.
+- It uses the same discharge helper, so you only install it once.
+
 ## Honest limits
 
 - Keeping the battery ready before you unplug is not a guarantee. If you unplug earlier than usual, or charging is slower (a power bank, for example), you may not reach the target in time. When the Mac is too hot, the limit stays at 80%, so it may not fill up either.
