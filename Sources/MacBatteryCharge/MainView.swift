@@ -8,8 +8,18 @@ struct RootView: View {
     /// 弹窗里的页面：主页，或者设置。第一次的引导由 model.showGuide 决定，盖在最上面。
     enum Page { case main, settings }
 
-    /// 菜单栏弹窗的大小。
-    static let popoverSize = NSSize(width: 400, height: 680)
+    /// 弹窗的高度固定；宽度跟着屏幕走，见 popoverSize(for:)。
+    static let popoverHeight: CGFloat = 680
+    /// 宽度的范围。下限是设置页的标准宽度，两排带标题的时间选择器要这么宽；上限是屏幕再宽，弹窗也不该大得不像菜单栏的弹窗。
+    static let popoverWidths: ClosedRange<CGFloat> = 400...520
+
+    /// 弹窗的大小：宽度取图标所在屏幕可用宽度的三成，再夹进 popoverWidths。屏幕不知道的时候取下限。
+    @MainActor
+    static func popoverSize(for screen: NSScreen?) -> NSSize {
+        let wanted = ((screen?.visibleFrame.width ?? 0) * 0.3).rounded()
+        let width = min(max(wanted, popoverWidths.lowerBound), popoverWidths.upperBound)
+        return NSSize(width: width, height: popoverHeight)
+    }
 
     @ObservedObject var model: AppModel
     @State private var page: Page

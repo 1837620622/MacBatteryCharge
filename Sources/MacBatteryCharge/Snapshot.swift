@@ -18,6 +18,8 @@ enum Snapshot {
         }
 
         var ok = true
+        // 截图用最窄的一档，和没有屏幕信息时弹窗的宽度一样。最宽的另外拍。
+        let popoverSize = RootView.popoverSize(for: nil)
         func file(_ name: String) -> URL { directory.appendingPathComponent(name) }
 
         // 中文和英文各一套，README 里中文用中文截图，英文用英文截图。
@@ -25,33 +27,39 @@ enum Snapshot {
             let tag = language == .zh ? "zh" : "en"
             for mode in ChargeMode.allCases {
                 let model = sampleModel(mode: mode, language: language)
-                ok = render(RootView(model: model), size: RootView.popoverSize, appearance: .aqua,
+                ok = render(RootView(model: model), size: popoverSize, appearance: .aqua,
                             to: file("main-\(mode.rawValue)-\(tag).png")) && ok
             }
             let model = sampleModel(mode: .smart, language: language)
-            ok = render(RootView(model: model), size: RootView.popoverSize, appearance: .darkAqua,
+            ok = render(RootView(model: model), size: popoverSize, appearance: .darkAqua,
                         to: file("main-smart-dark-\(tag).png")) && ok
             if let release = ReleaseInfo.parse(Data(#"{"tag_name":"v9.0.0","assets":[]}"#.utf8)) {
                 let ready = sampleModel(mode: .smart, language: language)
                 ready.loadPreviewUpdate(.available(release))
-                ok = render(RootView(model: ready), size: RootView.popoverSize, appearance: .aqua,
+                ok = render(RootView(model: ready), size: popoverSize, appearance: .aqua,
                             to: file("main-update-ready-\(tag).png")) && ok
                 let failed = sampleModel(mode: .smart, language: language)
                 failed.loadPreviewUpdate(.failed(T("下载没有成功，请检查网络。")))
-                ok = render(RootView(model: failed), size: RootView.popoverSize, appearance: .aqua,
+                ok = render(RootView(model: failed), size: popoverSize, appearance: .aqua,
                             to: file("main-update-failed-\(tag).png")) && ok
             }
             let settingsPage = sampleModel(mode: .smart, language: language)
-            ok = render(RootView(model: settingsPage, page: .settings), size: RootView.popoverSize, appearance: .aqua,
+            ok = render(RootView(model: settingsPage, page: .settings), size: popoverSize, appearance: .aqua,
                         to: file("settings-\(tag).png")) && ok
             // 工作日停电打开时，设置页会多出两行时间。这一页最容易被撑宽，单独拍一张。
             let outagePage = sampleModel(mode: .smart, language: language)
             outagePage.settings.outageEnabled = true
-            ok = render(RootView(model: outagePage, page: .settings), size: RootView.popoverSize, appearance: .aqua,
+            ok = render(RootView(model: outagePage, page: .settings), size: popoverSize, appearance: .aqua,
                         to: file("settings-outage-\(tag).png")) && ok
+            // 屏幕宽的时候弹窗会到最宽，最宽时也不能裁切，所以最宽的设置页和主页各拍一张。
+            let widest = NSSize(width: RootView.popoverWidths.upperBound, height: RootView.popoverHeight)
+            ok = render(RootView(model: outagePage, page: .settings), size: widest, appearance: .aqua,
+                        to: file("settings-outage-wide-\(tag).png")) && ok
+            ok = render(RootView(model: model), size: widest, appearance: .aqua,
+                        to: file("main-smart-wide-\(tag).png")) && ok
             let guidePage = sampleModel(mode: .smart, language: language)
             guidePage.showGuide = true
-            ok = render(RootView(model: guidePage), size: RootView.popoverSize, appearance: .aqua,
+            ok = render(RootView(model: guidePage), size: popoverSize, appearance: .aqua,
                         to: file("guide-\(tag).png")) && ok
             ok = render(islandPreview(model: model, expanded: true), size: NSSize(width: 400, height: 190), appearance: .darkAqua,
                         to: file("island-expanded-\(tag).png")) && ok

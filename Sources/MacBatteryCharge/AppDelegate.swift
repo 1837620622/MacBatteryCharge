@@ -196,7 +196,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         self.popover = popover
         if !popover.isShown {
             popover.contentViewController = makeContent()
-            popover.contentSize = RootView.popoverSize
+            // 宽度跟着图标所在的屏幕走，每次打开都重新量。图标找不到时跟着主屏幕，和下面的备用弹窗一致。
+            popover.contentSize = RootView.popoverSize(for: statusItem?.button?.window?.screen ?? NSScreen.main)
             if let button = statusItem?.button, button.window != nil {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             } else {
