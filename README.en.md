@@ -54,7 +54,7 @@ The app is not notarized by Apple. If macOS blocks it the first time, go to Syst
 
 - While the app runs, it checks once after launch and then about every 6 hours. You can turn this off with "Check for new versions automatically" in Settings.
 - When a new version is available, a notice appears at the top of the main window and in Settings. "Download New Version" opens the right installer for your chip in your browser, and you install it yourself. "Later" hides that version.
-- The app never downloads or installs for you, and never asks for a password. After you install a new version, the old one still running reopens itself within a minute or two. Settings and data are kept.
+- The app never downloads or installs for you, and never asks for a password. After you install a new version, the old one still running reopens itself within about 15 seconds. This also works when you run the app from the disk image. Settings and data are kept.
 - After installing a new version over the old one with the DMG, the discharge helper stays on the old version. Install it again in Settings → Advanced. The PKG replaces it automatically.
 
 ## Feedback

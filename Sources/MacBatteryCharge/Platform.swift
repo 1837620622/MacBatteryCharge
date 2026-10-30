@@ -112,6 +112,19 @@ enum Installation {
         return dictionary["CFBundleShortVersionString"] as? String
     }
 
+    /// 「应用程序」里那份的指纹：版本，加上程序文件的大小和修改时间。拷贝还没完时它一直在变，程序文件不存在时是 nil。
+    static func installedFingerprint(at url: URL = applicationsURL) -> String? {
+        let plist = url.appendingPathComponent("Contents/Info.plist")
+        guard let dictionary = NSDictionary(contentsOf: plist),
+              let version = dictionary["CFBundleShortVersionString"] as? String,
+              let executable = dictionary["CFBundleExecutable"] as? String,
+              let attributes = try? FileManager.default.attributesOfItem(atPath: url.appendingPathComponent("Contents/MacOS/\(executable)").path)
+        else { return nil }
+        let size = attributes[.size] as? UInt64 ?? 0
+        let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(version)|\(size)|\(modified)"
+    }
+
     /// 复制到 /Applications，去掉隔离标记。没有写权限时请系统要一次管理员密码。
     static func copyToApplications() -> Result<URL, InstallError> {
         let fm = FileManager.default

@@ -77,8 +77,8 @@ final class AppModel: ObservableObject {
     private var lastValidIntervals: [Interval]
     private var timer: Task<Void, Never>?
     private var updateTimer: Task<Void, Never>?
-    /// 「应用程序」里装好的版本，第一次看到时记下来；下一次还是它，才说明安装包已经装完。
-    private var settledVersion: String?
+    /// 「应用程序」里装好的新版本：连续两次看到同一份，才说明拷贝完了，再重新打开。
+    private var installWatch = InstallWatch()
     private var refreshing = false
     private var refreshStartedAt: Date?
     private var writingSince = Date.distantPast
@@ -209,16 +209,17 @@ final class AppModel: ObservableObject {
         updateTimer = makeUpdateTimer()
     }
 
-    /// 启动十秒后查一次更新。之后每分钟看一眼「应用程序」里装好的版本（你手动装上以后，旧版本会自己重新打开），每小时查一次更新。
+    /// 启动十秒后开始：每 5 秒看一眼「应用程序」里装好的版本（你手动装上以后，旧版本会自己重新打开）；每小时看一眼要不要查新版本。
     private func makeUpdateTimer() -> Task<Void, Never> {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
-            var minutes = 0
+            var ticks = 0
             while !Task.isCancelled {
                 self?.watchInstalledVersion()
-                if minutes % 60 == 0 { self?.maybeCheckForUpdates() }
-                minutes += 1
-                try? await Task.sleep(for: .seconds(60))
+                // 5 秒一次，720 次是一小时。没到六小时的间隔时，maybeCheckForUpdates 自己会挡住。
+                if ticks % 720 == 0 { self?.maybeCheckForUpdates() }
+                ticks += 1
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }
@@ -811,21 +812,22 @@ final class AppModel: ObservableObject {
         update = .idle
     }
 
-    /// 你手动装上新版本以后，正在跑的旧版本要自己重新打开，不用重启电脑。
-    /// 每分钟看一眼「应用程序」里装的版本；同一个版本连续两次都看到，才说明安装包已经装完。
+    /// 你装上新版本以后，正在跑的旧版本要自己换成新的，不用重启电脑。
+    /// 「应用程序」里的版本比正在跑的新，就等它拷贝完（见 InstallWatch），然后重新打开它、退出自己。
+    /// 从磁盘映像里直接跑的旧版本也一样：只要「应用程序」里有更新的，就换成那个。
     private func watchInstalledVersion() {
-        guard !preview, Installation.isInApplications,
-              let installed = Installation.installedVersion(),
-              AppVersion.isNewer(installed, than: Installation.version) else {
-            settledVersion = nil
-            return
+        var newer: String?
+        if !preview, Installation.isBundle, let installed = Installation.installedVersion(),
+           AppVersion.isNewer(installed, than: Installation.version) {
+            newer = installed
         }
-        guard settledVersion == installed else {
-            settledVersion = installed
-            return
-        }
-        update = .relaunching(installed)
-        Installation.relaunchAfterExit(background: !windowVisible)
+        let fingerprint: String? = newer == nil ? nil : Installation.installedFingerprint()
+        guard installWatch.observe(fingerprint), let version = newer else { return }
+        // 窗口开着，或者你正在看这个更新，就带着窗口打开；否则在后台悄悄地打开。
+        var showWindow = windowVisible
+        if case .available = update { showWindow = true }
+        update = .relaunching(version)
+        Installation.relaunchAfterExit(background: !showWindow)
         NSApp.terminate(nil)
     }
 
